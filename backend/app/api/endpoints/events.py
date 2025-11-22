@@ -64,6 +64,7 @@ async def receive_event(
 
     except Exception as e:
         logging.error(f"❌ Error guardando evento o evaluando reglas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error saving event: {str(e)}")
     finally:
         db.close()
 

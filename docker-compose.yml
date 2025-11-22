@@ -27,7 +27,7 @@ services:
       - "8554:8554" # RTSP
       - "8555:8555" # WebRTC
     volumes:
-      - ./config/config.yml:/config/config.yml:rw  # Cambiar a rw para que el backend pueda editarlo
+      - ./config/config.yml:/config/config.yml:rw # Cambiar a rw para que el backend pueda editarlo
       - ./media:/media/frigate
       - /etc/localtime:/etc/localtime:ro
     networks:
@@ -60,7 +60,7 @@ services:
       - ./backend/.env
     volumes:
       - ./backend:/app
-      - ./config:/config:rw  # Montar config para poder editar config.yml
+      - ./config:/config:rw # Montar config para poder editar config.yml
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-frigate_events}
       - FRIGATE_CONFIG_PATH=/config/config.yml
@@ -79,7 +79,7 @@ services:
       - ./python-listener/.env
     environment:
       - MQTT_HOST=mosquitto
-      - CLOUD_API_URL=http://backend:8000/api/events/
+      - CLOUD_API_URL=https://proyectocamaras-production.up.railway.app/api/events/
     networks:
       - frigate_net
 
