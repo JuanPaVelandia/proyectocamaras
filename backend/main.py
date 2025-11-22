@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 import logging
 import os
 from dotenv import load_dotenv
@@ -27,7 +28,15 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+# ... (imports existentes)
+
 app = FastAPI(title="Frigate Alert System")
+
+# Configurar ProxyHeadersMiddleware para Railway (HTTPS)
+# Esto permite que FastAPI sepa que está detrás de un proxy HTTPS y genere URLs correctas
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 # Health check endpoints para Railway
 @app.get("/")
