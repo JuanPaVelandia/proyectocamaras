@@ -28,6 +28,8 @@ export function getApiBase() {
 // Log para debug
 if (typeof window !== 'undefined') {
   console.log('🔗 URL del API configurada:', API_BASE);
+  console.log('🔗 Variable de entorno VITE_API_URL:', import.meta.env.VITE_API_URL);
+  console.log('🔗 URL corregida (con HTTPS si es necesario):', getCorrectBaseURL());
 }
 
 // URL del proxy local de Frigate (solo en desarrollo/localhost)
@@ -55,8 +57,24 @@ if (typeof window !== 'undefined' && isDevelopment) {
   });
 }
 
+// Función para obtener el baseURL correcto (siempre HTTPS en producción)
+function getCorrectBaseURL() {
+  let base = API_BASE;
+  
+  // Forzar HTTPS en producción
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    if (base.startsWith('http://') && !base.includes('localhost')) {
+      base = base.replace('http://', 'https://');
+      console.warn('⚠️ Se corrigió el baseURL a HTTPS:', base);
+    }
+  }
+  
+  return base;
+}
+
+// Crear instancia de axios con baseURL que se actualiza dinámicamente
 export const api = axios.create({
-  baseURL: API_BASE,
+  baseURL: getCorrectBaseURL(),
   headers: {
     "Content-Type": "application/json",
   },
@@ -76,18 +94,19 @@ export const frigateProxy = axios.create({
 // Exportar flag para saber si estamos en desarrollo
 export const IS_DEVELOPMENT = isDevelopment;
 
-// Interceptor para agregar token automáticamente y forzar HTTPS
+// Interceptor para agregar token automáticamente y forzar HTTPS en cada petición
 api.interceptors.request.use((config) => {
-  // Forzar HTTPS en producción si la URL es HTTP
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    if (config.url && config.url.startsWith('http://') && !config.url.includes('localhost')) {
-      config.url = config.url.replace('http://', 'https://');
-      console.warn('⚠️ Se corrigió la URL de la petición a HTTPS:', config.url);
-    }
-    if (config.baseURL && config.baseURL.startsWith('http://') && !config.baseURL.includes('localhost')) {
-      config.baseURL = config.baseURL.replace('http://', 'https://');
-      console.warn('⚠️ Se corrigió el baseURL a HTTPS:', config.baseURL);
-    }
+  // Actualizar baseURL en cada petición para asegurar HTTPS
+  const correctBaseURL = getCorrectBaseURL();
+  if (config.baseURL !== correctBaseURL) {
+    config.baseURL = correctBaseURL;
+    console.warn('⚠️ Se actualizó el baseURL a HTTPS:', correctBaseURL);
+  }
+  
+  // También verificar la URL completa si es absoluta
+  if (config.url && config.url.startsWith('http://') && !config.url.includes('localhost')) {
+    config.url = config.url.replace('http://', 'https://');
+    console.warn('⚠️ Se corrigió la URL de la petición a HTTPS:', config.url);
   }
   
   const token = localStorage.getItem("adminToken");
