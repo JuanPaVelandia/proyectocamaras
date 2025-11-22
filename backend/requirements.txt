@@ -7,5 +7,6 @@ requests
 pyjwt
 pyyaml
 authlib
+httpx
 python-jose[cryptography]
 python-multipart
