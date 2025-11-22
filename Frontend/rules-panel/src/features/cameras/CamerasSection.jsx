@@ -69,7 +69,7 @@ export function CamerasSection() {
         try {
             await api.post("/api/cameras", form);
             addToast("Cámara agregada correctamente", "success");
-            
+
             // Reiniciar Frigate para aplicar cambios
             try {
                 const restartRes = await api.post("/api/cameras/restart-frigate");
@@ -81,7 +81,7 @@ export function CamerasSection() {
             } catch (restartErr) {
                 addToast("Cámara agregada. Reinicia Frigate manualmente: docker restart frigate", "warning");
             }
-            
+
             await loadCameras();
             resetForm();
         } catch (err) {
@@ -91,15 +91,15 @@ export function CamerasSection() {
         }
     };
 
-    const handleDeleteCamera = async (cameraName) => {
-        if (!window.confirm(`¿Estás seguro de que quieres eliminar la cámara "${cameraName}"?`)) {
+    const handleDeleteCamera = async (cameraId) => {
+        if (!window.confirm(`¿Estás seguro de que quieres eliminar esta cámara?`)) {
             return;
         }
 
         try {
-            await api.delete(`/api/cameras/${cameraName}`);
+            await api.delete(`/api/cameras/${cameraId}`);
             addToast("Cámara eliminada correctamente", "success");
-            
+
             // Reiniciar Frigate
             try {
                 const restartRes = await api.post("/api/cameras/restart-frigate");
@@ -109,7 +109,7 @@ export function CamerasSection() {
             } catch (restartErr) {
                 addToast("Reinicia Frigate manualmente: docker restart frigate", "warning");
             }
-            
+
             await loadCameras();
         } catch (err) {
             console.error(err);
@@ -139,7 +139,7 @@ export function CamerasSection() {
     };
 
     return (
-        <div 
+        <div
             className="grid-layout"
             style={{
                 display: "grid",
@@ -411,7 +411,7 @@ export function CamerasSection() {
                                         border: "1px solid #fecaca",
                                         marginTop: "auto",
                                     }}
-                                    onClick={() => handleDeleteCamera(camera.name)}
+                                    onClick={() => handleDeleteCamera(camera.id)}
                                 >
                                     🗑️ Eliminar Cámara
                                 </Button>
