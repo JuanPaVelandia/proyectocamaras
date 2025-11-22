@@ -16,6 +16,7 @@ load_dotenv()
 # Manejar errores de conexión a la base de datos
 try:
     Base.metadata.create_all(bind=engine)
+    logging.info("✅ Base de datos conectada correctamente")
 except Exception as e:
     logging.warning(f"⚠️  No se pudo conectar a la base de datos al inicio: {e}")
     logging.info("La aplicación continuará, pero algunas funciones pueden no funcionar")
