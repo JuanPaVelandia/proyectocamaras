@@ -29,3 +29,4 @@ EXPOSE 8000
 
 # Comando de inicio (usa run.py para leer PORT de Railway)
 CMD ["python", "run.py"]
+
