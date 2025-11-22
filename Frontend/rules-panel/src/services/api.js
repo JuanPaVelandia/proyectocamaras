@@ -2,34 +2,35 @@ import axios from "axios";
 
 // Función helper para obtener la URL del API siempre con HTTPS en producción
 function getApiBaseUrl() {
-  let apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  
-  // SIEMPRE forzar HTTPS en producción (Vercel), sin importar qué tenga la variable
+  // En producción (Vercel), construir la URL directamente con HTTPS
+  // NO depender de la variable de entorno que puede estar mal configurada
   if (typeof window !== 'undefined') {
     const isProduction = window.location.hostname.includes('vercel.app') || 
                          window.location.hostname.includes('railway.app') ||
-                         window.location.protocol === 'https:';
+                         (window.location.protocol === 'https:' && !window.location.hostname.includes('localhost'));
     
     if (isProduction) {
-      // Si estamos en producción, SIEMPRE usar HTTPS
-      // Extraer el dominio sin importar si viene con http:// o https://
-      let domain = apiBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      // En producción, SIEMPRE usar el backend de Railway con HTTPS
+      // Extraer el dominio de la variable de entorno si existe, sino usar el dominio por defecto
+      let domain = 'proyectocamaras-production.up.railway.app';
       
-      // Si no es localhost, forzar HTTPS
-      if (!domain.includes('localhost') && !domain.includes('127.0.0.1')) {
-        apiBase = `https://${domain}`;
-        console.warn('🔒 [FORZADO] URL del API forzada a HTTPS en producción:', apiBase);
+      const envUrl = import.meta.env.VITE_API_URL;
+      if (envUrl) {
+        // Extraer el dominio de la variable de entorno
+        const extractedDomain = envUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        if (extractedDomain && !extractedDomain.includes('localhost')) {
+          domain = extractedDomain;
+        }
       }
-    } else if (window.location.protocol === 'https:') {
-      // Si estamos en HTTPS pero no en producción (desarrollo con HTTPS), también forzar
-      if (apiBase.startsWith('http://') && !apiBase.includes('localhost')) {
-        apiBase = apiBase.replace('http://', 'https://');
-        console.warn('⚠️ Se corrigió la URL del API a HTTPS:', apiBase);
-      }
+      
+      const apiBase = `https://${domain}`;
+      console.warn('🔒 [PRODUCCIÓN] URL del API construida con HTTPS:', apiBase);
+      return apiBase;
     }
   }
   
-  return apiBase;
+  // En desarrollo, usar la variable de entorno o localhost
+  return import.meta.env.VITE_API_URL || "http://localhost:8000";
 }
 
 // En desarrollo: localhost
@@ -79,23 +80,21 @@ function getCorrectBaseURL() {
   return getApiBaseUrl();
 }
 
-// Crear instancia de axios con baseURL que se actualiza dinámicamente
-const initialBaseURL = getCorrectBaseURL();
+// Crear instancia de axios - el baseURL se establecerá dinámicamente
 export const api = axios.create({
-  baseURL: initialBaseURL,
+  // NO establecer baseURL aquí, se establecerá dinámicamente en el interceptor
   headers: {
     "Content-Type": "application/json",
   },
   timeout: 10000, // 10 segundos de timeout
 });
 
-// Forzar actualización del baseURL después de crear la instancia
-if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+// Establecer baseURL dinámicamente después de crear la instancia
+// Esto se ejecuta en tiempo de ejecución, no en tiempo de build
+if (typeof window !== 'undefined') {
   const correctURL = getCorrectBaseURL();
-  if (api.defaults.baseURL !== correctURL) {
-    api.defaults.baseURL = correctURL;
-    console.warn('⚠️ Se actualizó api.defaults.baseURL a HTTPS:', correctURL);
-  }
+  api.defaults.baseURL = correctURL;
+  console.warn('🔒 [RUNTIME] api.defaults.baseURL establecido a:', correctURL);
 }
 
 // API para el proxy local de Frigate (solo para cámaras y objetos)
@@ -113,38 +112,35 @@ export const IS_DEVELOPMENT = isDevelopment;
 
 // Interceptor para agregar token automáticamente y forzar HTTPS en cada petición
 api.interceptors.request.use((config) => {
-  // SIEMPRE forzar HTTPS en producción, sin importar qué tenga config.baseURL
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    const correctBaseURL = getCorrectBaseURL();
-    
-    // Reemplazar baseURL si contiene HTTP (no localhost)
-    if (config.baseURL && config.baseURL.startsWith('http://') && !config.baseURL.includes('localhost')) {
-      config.baseURL = config.baseURL.replace('http://', 'https://');
-      console.warn('⚠️ [INTERCEPTOR] Se corrigió el baseURL a HTTPS:', config.baseURL);
+  // SIEMPRE establecer el baseURL correcto en cada petición
+  // Esto asegura que incluso si el código compilado tiene HTTP, se corrija en runtime
+  const correctBaseURL = getCorrectBaseURL();
+  config.baseURL = correctBaseURL;
+  
+  // Si la URL es absoluta y tiene HTTP, corregirla
+  if (config.url && config.url.startsWith('http://') && !config.url.includes('localhost')) {
+    config.url = config.url.replace('http://', 'https://');
+    console.warn('⚠️ [INTERCEPTOR] Se corrigió la URL absoluta a HTTPS:', config.url);
+  }
+  
+  // Construir la URL completa para verificar
+  const fullUrl = config.url 
+    ? (config.url.startsWith('http') ? config.url : `${config.baseURL}${config.url}`)
+    : config.baseURL;
+  
+  // Si la URL completa tiene HTTP, forzar HTTPS
+  if (fullUrl && fullUrl.startsWith('http://') && !fullUrl.includes('localhost')) {
+    const correctedUrl = fullUrl.replace('http://', 'https://');
+    // Si la URL es absoluta, usar la URL corregida directamente
+    if (config.url && config.url.startsWith('http')) {
+      config.url = correctedUrl;
+      config.baseURL = '';
+    } else {
+      // Si es relativa, actualizar el baseURL
+      const urlPath = config.url || '';
+      config.baseURL = correctedUrl.replace(urlPath, '').replace(/\/$/, '');
     }
-    
-    // También forzar el baseURL correcto si es diferente
-    if (config.baseURL !== correctBaseURL && !config.baseURL.includes('localhost')) {
-      config.baseURL = correctBaseURL;
-      console.warn('⚠️ [INTERCEPTOR] Se actualizó el baseURL a:', config.baseURL);
-    }
-    
-    // Construir la URL completa y verificar
-    const fullUrl = config.url 
-      ? (config.url.startsWith('http') ? config.url : `${config.baseURL}${config.url}`)
-      : config.baseURL;
-    
-    if (fullUrl && fullUrl.startsWith('http://') && !fullUrl.includes('localhost')) {
-      const correctedUrl = fullUrl.replace('http://', 'https://');
-      // Si la URL es absoluta, reemplazarla directamente
-      if (config.url && config.url.startsWith('http://')) {
-        config.url = correctedUrl;
-      } else {
-        // Si es relativa, actualizar el baseURL
-        config.baseURL = correctedUrl.replace(config.url || '', '');
-      }
-      console.warn('⚠️ [INTERCEPTOR] Se corrigió la URL completa a HTTPS:', correctedUrl);
-    }
+    console.warn('⚠️ [INTERCEPTOR] Se corrigió la URL completa a HTTPS:', correctedUrl);
   }
   
   const token = localStorage.getItem("adminToken");
@@ -154,11 +150,22 @@ api.interceptors.request.use((config) => {
   
   // Log final para debug
   if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    const finalUrl = config.url 
+      ? (config.url.startsWith('http') ? config.url : `${config.baseURL || ''}${config.url}`)
+      : config.baseURL;
     console.log('🔍 [INTERCEPTOR] Petición final:', {
       baseURL: config.baseURL,
       url: config.url,
-      fullUrl: config.url ? (config.url.startsWith('http') ? config.url : `${config.baseURL}${config.url}`) : config.baseURL
+      finalUrl: finalUrl
     });
+    
+    // Verificar una última vez que no tenga HTTP
+    if (finalUrl && finalUrl.startsWith('http://') && !finalUrl.includes('localhost')) {
+      console.error('❌ [ERROR] La URL final todavía tiene HTTP:', finalUrl);
+      // Forzar HTTPS una última vez
+      config.baseURL = finalUrl.replace('http://', 'https://').replace(config.url || '', '').replace(/\/$/, '');
+      console.warn('🔒 [ÚLTIMO INTENTO] Se forzó HTTPS:', config.baseURL);
+    }
   }
   
   return config;
