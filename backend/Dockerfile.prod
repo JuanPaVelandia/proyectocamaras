@@ -22,6 +22,6 @@ COPY . .
 # Exponer puerto
 EXPOSE 8000
 
-# Comando de inicio (sin --reload en producción)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Comando de inicio (usa run.py para leer PORT de Railway)
+CMD ["python", "run.py"]
 
