@@ -184,9 +184,22 @@ export function CamerasSection() {
                         value={form.name}
                         onChange={(e) => setForm({ ...form, name: e.target.value.toLowerCase().replace(/\s+/g, "_") })}
                     />
-                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: -8, marginBottom: 12 }}>
-                        Solo letras, números, guiones y guiones bajos
-                    </p>
+                    <div style={{
+                        fontSize: 11,
+                        color: "#f59e0b",
+                        marginTop: 6,
+                        marginBottom: 12,
+                        padding: "8px 12px",
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        borderRadius: 6,
+                    }}>
+                        <strong>⚠️ Importante:</strong> El nombre debe coincidir <strong>exactamente</strong> con el configurado en Frigate local.
+                        <br />
+                        <span style={{ fontSize: 10, color: "#92400e" }}>
+                            Ejemplo: Si en tu archivo config.yml de Frigate tienes "cam_apto", usa ese mismo nombre aquí.
+                        </span>
+                    </div>
 
                     <label style={labelStyle}>IP DE LA CÁMARA</label>
                     <Input
