@@ -33,11 +33,16 @@ DEV_ORIGINS = [
 
 PROD_ORIGINS = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else []
 
+# Permitir todos los orígenes de Vercel usando regex
+# O usar allow_origins=["*"] para desarrollo (no recomendado en producción)
+VERCEL_PATTERN = r"https://.*\.vercel\.app"
+
 origins = DEV_ORIGINS + [origin.strip() for origin in PROD_ORIGINS if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=VERCEL_PATTERN,  # Permite todos los subdominios de vercel.app
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
