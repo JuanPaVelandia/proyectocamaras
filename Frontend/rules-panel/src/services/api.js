@@ -73,13 +73,23 @@ function getCorrectBaseURL() {
 }
 
 // Crear instancia de axios con baseURL que se actualiza dinámicamente
+const initialBaseURL = getCorrectBaseURL();
 export const api = axios.create({
-  baseURL: getCorrectBaseURL(),
+  baseURL: initialBaseURL,
   headers: {
     "Content-Type": "application/json",
   },
   timeout: 10000, // 10 segundos de timeout
 });
+
+// Forzar actualización del baseURL después de crear la instancia
+if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+  const correctURL = getCorrectBaseURL();
+  if (api.defaults.baseURL !== correctURL) {
+    api.defaults.baseURL = correctURL;
+    console.warn('⚠️ Se actualizó api.defaults.baseURL a HTTPS:', correctURL);
+  }
+}
 
 // API para el proxy local de Frigate (solo para cámaras y objetos)
 // Solo se usa en desarrollo, en producción siempre usa el backend de Railway
@@ -96,23 +106,54 @@ export const IS_DEVELOPMENT = isDevelopment;
 
 // Interceptor para agregar token automáticamente y forzar HTTPS en cada petición
 api.interceptors.request.use((config) => {
-  // Actualizar baseURL en cada petición para asegurar HTTPS
-  const correctBaseURL = getCorrectBaseURL();
-  if (config.baseURL !== correctBaseURL) {
-    config.baseURL = correctBaseURL;
-    console.warn('⚠️ Se actualizó el baseURL a HTTPS:', correctBaseURL);
-  }
-  
-  // También verificar la URL completa si es absoluta
-  if (config.url && config.url.startsWith('http://') && !config.url.includes('localhost')) {
-    config.url = config.url.replace('http://', 'https://');
-    console.warn('⚠️ Se corrigió la URL de la petición a HTTPS:', config.url);
+  // SIEMPRE forzar HTTPS en producción, sin importar qué tenga config.baseURL
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    const correctBaseURL = getCorrectBaseURL();
+    
+    // Reemplazar baseURL si contiene HTTP (no localhost)
+    if (config.baseURL && config.baseURL.startsWith('http://') && !config.baseURL.includes('localhost')) {
+      config.baseURL = config.baseURL.replace('http://', 'https://');
+      console.warn('⚠️ [INTERCEPTOR] Se corrigió el baseURL a HTTPS:', config.baseURL);
+    }
+    
+    // También forzar el baseURL correcto si es diferente
+    if (config.baseURL !== correctBaseURL && !config.baseURL.includes('localhost')) {
+      config.baseURL = correctBaseURL;
+      console.warn('⚠️ [INTERCEPTOR] Se actualizó el baseURL a:', config.baseURL);
+    }
+    
+    // Construir la URL completa y verificar
+    const fullUrl = config.url 
+      ? (config.url.startsWith('http') ? config.url : `${config.baseURL}${config.url}`)
+      : config.baseURL;
+    
+    if (fullUrl && fullUrl.startsWith('http://') && !fullUrl.includes('localhost')) {
+      const correctedUrl = fullUrl.replace('http://', 'https://');
+      // Si la URL es absoluta, reemplazarla directamente
+      if (config.url && config.url.startsWith('http://')) {
+        config.url = correctedUrl;
+      } else {
+        // Si es relativa, actualizar el baseURL
+        config.baseURL = correctedUrl.replace(config.url || '', '');
+      }
+      console.warn('⚠️ [INTERCEPTOR] Se corrigió la URL completa a HTTPS:', correctedUrl);
+    }
   }
   
   const token = localStorage.getItem("adminToken");
   if (token) {
     config.headers["X-Admin-Token"] = token;
   }
+  
+  // Log final para debug
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    console.log('🔍 [INTERCEPTOR] Petición final:', {
+      baseURL: config.baseURL,
+      url: config.url,
+      fullUrl: config.url ? (config.url.startsWith('http') ? config.url : `${config.baseURL}${config.url}`) : config.baseURL
+    });
+  }
+  
   return config;
 });
 
