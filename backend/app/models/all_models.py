@@ -33,6 +33,22 @@ class EventDB(Base):
     rule_hits = relationship("RuleHitDB", back_populates="event")
 
 
+class CameraDB(Base):
+    __tablename__ = "cameras"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False, index=True)  # Nombre en Frigate
+    rtsp_url = Column(String(500), nullable=True)  # URL RTSP (opcional, informativo)
+    description = Column(Text, nullable=True)  # Descripción opcional
+    enabled = Column(Boolean, default=True)  # Si está activa
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relación con usuario que la creó
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("UserDB")
+
+
+
 class RuleDB(Base):
     __tablename__ = "rules"
 

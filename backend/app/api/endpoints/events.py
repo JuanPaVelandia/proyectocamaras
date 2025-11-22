@@ -41,20 +41,23 @@ async def receive_event(
 
     body = await request.json()
     
-    # Validar si la cámara existe en la configuración
-    # Esto evita guardar eventos de cámaras eliminadas del frontend pero activas en local
-    from app.api.endpoints.cameras import load_frigate_config
-    config = load_frigate_config()
+    # Validar si la cámara existe en la base de datos
+    # Solo aceptamos eventos de cámaras registradas en el sistema
+    from app.models.all_models import CameraDB
     camera_name = body.get("camera")
     
-    if config is not None:
-        # Obtener cámaras configuradas (vacío si no hay ninguna)
-        configured_cameras = config.get("cameras", {})
+    db_check = SessionLocal()
+    try:
+        camera = db_check.query(CameraDB).filter(
+            CameraDB.name == camera_name,
+            CameraDB.enabled == True
+        ).first()
         
-        if camera_name not in configured_cameras:
-            logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la configuración actual.")
-            # Retornamos OK para que el listener no reintente, pero no guardamos nada
-            return {"status": "ignored", "reason": "camera_not_found"}
+        if not camera:
+            logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la base de datos o está deshabilitada.")
+            return {"status": "ignored", "reason": "camera_not_in_database"}
+    finally:
+        db_check.close()
 
     logging.info(f"📨 Evento recibido en backend: {body}")
 

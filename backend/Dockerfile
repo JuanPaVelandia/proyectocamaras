@@ -18,10 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Crear directorio de configuración y copiar archivo
-RUN mkdir -p /config
-COPY config.yml /config/config.yml
-
 # Copiar el código
 COPY . .
 
