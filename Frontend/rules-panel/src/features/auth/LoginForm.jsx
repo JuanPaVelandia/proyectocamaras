@@ -40,8 +40,8 @@ export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegiste
         console.log("🔐 Intentando login...", { username, password: "***" });
         setLoading(true);
         try {
-            console.log("📡 Enviando petición a /api/login");
-            const res = await api.post("/api/login", {
+            console.log("📡 Enviando petición a /api/auth/login");
+            const res = await api.post("/api/auth/login", {
                 username,
                 password,
             });
