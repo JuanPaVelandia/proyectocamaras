@@ -79,7 +79,20 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
             }, 500);
         } catch (err) {
             console.error("❌ Error en registro:", err);
-            const errorMsg = err.response?.data?.detail || "Error al registrar usuario";
+            let errorMsg = "Error al registrar usuario";
+
+            if (err.response?.data?.detail) {
+                const detail = err.response.data.detail;
+                if (Array.isArray(detail)) {
+                    // Si es un error de validación de FastAPI (lista de errores)
+                    errorMsg = detail.map(e => `${e.loc[1]}: ${e.msg}`).join(". ");
+                } else if (typeof detail === 'object') {
+                    errorMsg = JSON.stringify(detail);
+                } else {
+                    errorMsg = detail;
+                }
+            }
+
             addToast(errorMsg, "error");
         } finally {
             setLoading(false);
