@@ -4,24 +4,19 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 import re
-
 from app.db.session import SessionLocal
 from app.models.all_models import UserDB
 from app.core.security import create_access_token, verify_token, hash_password, verify_password
-
 router = APIRouter()
-
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
 class LoginRequest(BaseModel):
     username: str
     password: str
-
 class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
@@ -51,7 +46,6 @@ class RegisterRequest(BaseModel):
         if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
             raise ValueError('Número de WhatsApp inválido (formato internacional: +573001234567)')
         return v
-
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     """Registra un nuevo usuario"""
@@ -92,7 +86,6 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         "username": new_user.username,
         "email": new_user.email
     }
-
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     """Login con username y contraseña"""
@@ -116,7 +109,6 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "email": user.email,
         "whatsapp_number": user.whatsapp_number
     }
-
 def get_current_user(
     x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
     db: Session = Depends(get_db)
