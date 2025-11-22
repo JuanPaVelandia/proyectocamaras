@@ -53,7 +53,7 @@ export function RulesSection() {
         setLoadingOptions(true);
         try {
             let camerasRes, objectsRes;
-            
+
             // Solo intentar usar el proxy local si estamos en desarrollo (localhost)
             // En producción (Vercel), NUNCA intentar usar el proxy local para evitar Mixed Content
             if (IS_DEVELOPMENT) {
@@ -72,10 +72,20 @@ export function RulesSection() {
                 // En producción (Vercel), SIEMPRE usar el backend de Railway
                 // NO intentar usar el proxy local para evitar errores de Mixed Content
                 console.log("🌐 Producción: usando backend de Railway");
-                camerasRes = await api.get("/api/frigate/cameras");
+
+                // CAMBIO: Usar /api/cameras (configuración guardada) en lugar de /api/frigate/cameras (estado en vivo)
+                // Esto es necesario porque en arquitectura híbrida el backend (nube) no puede ver al Frigate (local)
+                const configCamerasRes = await api.get("/api/cameras");
+                camerasRes = {
+                    data: {
+                        // La API /api/cameras devuelve objetos {name, rtsp_url...}, extraemos solo los nombres
+                        cameras: configCamerasRes.data.cameras.map(c => c.name)
+                    }
+                };
+
                 objectsRes = await api.get("/api/frigate/objects");
             }
-            
+
             setCameras(camerasRes.data.cameras || []);
             setObjects(objectsRes.data.objects || []);
         } catch (err) {
@@ -238,7 +248,7 @@ export function RulesSection() {
     };
 
     return (
-        <div 
+        <div
             className="grid-layout"
             style={{
                 display: "grid",
@@ -553,8 +563,8 @@ export function RulesSection() {
                     <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, marginBottom: 12 }}>
                         Variables disponibles: {'{camera}'}, {'{label}'}, {'{score}'}, {'{duration}'}, {'{event_id}'}, {'{rule_name}'}
                     </p>
-                    <Button 
-                        onClick={editingRuleId ? handleUpdateRule : handleCreateRule} 
+                    <Button
+                        onClick={editingRuleId ? handleUpdateRule : handleCreateRule}
                         style={{ marginTop: 8 }}
                     >
                         {editingRuleId ? "Actualizar Regla" : "Crear Regla"}
@@ -679,9 +689,9 @@ export function RulesSection() {
                                         {(rule.time_start || rule.time_end) && (
                                             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                                 🕐 {
-                                                    rule.time_start && rule.time_end 
+                                                    rule.time_start && rule.time_end
                                                         ? `${rule.time_start} - ${rule.time_end}`
-                                                        : rule.time_start 
+                                                        : rule.time_start
                                                             ? `Desde ${rule.time_start}`
                                                             : `Hasta ${rule.time_end}`
                                                 }
