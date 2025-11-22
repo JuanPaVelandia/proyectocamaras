@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../../services/api";
+import { api, frigateProxy, IS_DEVELOPMENT } from "../../services/api";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
@@ -52,12 +52,31 @@ export function RulesSection() {
     const loadFrigateOptions = async () => {
         setLoadingOptions(true);
         try {
-            // Cargar cámaras
-            const camerasRes = await api.get("/api/frigate/cameras");
-            setCameras(camerasRes.data.cameras || []);
+            let camerasRes, objectsRes;
             
-            // Cargar objetos
-            const objectsRes = await api.get("/api/frigate/objects");
+            // Solo intentar usar el proxy local si estamos en desarrollo (localhost)
+            // En producción (Vercel), NUNCA intentar usar el proxy local para evitar Mixed Content
+            if (IS_DEVELOPMENT) {
+                try {
+                    // Intentar con el proxy local (solo en desarrollo)
+                    camerasRes = await frigateProxy.get("/api/frigate/cameras");
+                    objectsRes = await frigateProxy.get("/api/frigate/objects");
+                    console.log("✅ Usando proxy local de Frigate");
+                } catch (proxyError) {
+                    // Si el proxy local no está disponible, usar el backend de Railway
+                    console.log("⚠️ Proxy local no disponible, usando backend de Railway");
+                    camerasRes = await api.get("/api/frigate/cameras");
+                    objectsRes = await api.get("/api/frigate/objects");
+                }
+            } else {
+                // En producción (Vercel), SIEMPRE usar el backend de Railway
+                // NO intentar usar el proxy local para evitar errores de Mixed Content
+                console.log("🌐 Producción: usando backend de Railway");
+                camerasRes = await api.get("/api/frigate/cameras");
+                objectsRes = await api.get("/api/frigate/objects");
+            }
+            
+            setCameras(camerasRes.data.cameras || []);
             setObjects(objectsRes.data.objects || []);
         } catch (err) {
             console.error("Error cargando opciones de Frigate:", err);

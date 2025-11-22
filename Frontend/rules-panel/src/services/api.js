@@ -8,10 +8,26 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const FRIGATE_PROXY_URL = import.meta.env.VITE_FRIGATE_PROXY_URL || "http://localhost:8001";
 
 // Detectar si estamos en desarrollo (localhost) o producción
+// En producción (Vercel), siempre usar HTTPS y dominios como *.vercel.app
 const isDevelopment = typeof window !== 'undefined' && 
   (window.location.hostname === 'localhost' || 
    window.location.hostname === '127.0.0.1' ||
-   window.location.protocol === 'http:');
+   (window.location.protocol === 'http:' && !window.location.hostname.includes('vercel.app')));
+
+// Log para debug (solo en desarrollo)
+if (typeof window !== 'undefined' && isDevelopment) {
+  console.log('🔧 Modo desarrollo detectado:', {
+    hostname: window.location.hostname,
+    protocol: window.location.protocol,
+    isDevelopment
+  });
+} else if (typeof window !== 'undefined') {
+  console.log('🌐 Modo producción detectado:', {
+    hostname: window.location.hostname,
+    protocol: window.location.protocol,
+    isDevelopment
+  });
+}
 
 export const api = axios.create({
   baseURL: API_BASE,

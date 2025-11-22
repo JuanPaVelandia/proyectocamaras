@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../../services/api";
+import { api, frigateProxy, IS_DEVELOPMENT } from "../../services/api";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -67,7 +67,20 @@ export function OnboardingWizard({ onComplete }) {
 
     const loadObjects = async () => {
         try {
-            const objectsRes = await api.get("/api/frigate/objects");
+            let objectsRes;
+            
+            // Solo intentar usar el proxy local si estamos en desarrollo (localhost)
+            if (IS_DEVELOPMENT) {
+                try {
+                    objectsRes = await frigateProxy.get("/api/frigate/objects");
+                } catch (proxyError) {
+                    objectsRes = await api.get("/api/frigate/objects");
+                }
+            } else {
+                // En producción (Vercel), siempre usar el backend de Railway
+                objectsRes = await api.get("/api/frigate/objects");
+            }
+            
             setObjects(objectsRes.data.objects || []);
         } catch (err) {
             console.error("Error cargando objetos:", err);
