@@ -14,7 +14,7 @@ class UserDB(Base):
     # OAuth fields
     oauth_provider = Column(String(50), nullable=True)  # 'google', 'facebook', etc.
     oauth_id = Column(String(255), nullable=True)  # ID del usuario en el proveedor OAuth
-    email = Column(String(255), nullable=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
     full_name = Column(String(255), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     

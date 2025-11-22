@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { LoginForm } from "./features/auth/LoginForm";
+import { RegisterForm } from "./features/auth/RegisterForm";
 import { DashboardLayout } from "./layouts/DashboardLayout";
 import { RulesSection } from "./features/rules/RulesSection";
 import { HitsSection } from "./features/dashboard/HitsSection";
@@ -14,16 +15,16 @@ import "./styles/typography.css";
 import "./styles/layout.css";
 
 function App() {
-    const [token, setToken] = useState(localStorage.getItem("adminToken") || "");
-    const [view, setView] = useState(() => {
-        const savedView = localStorage.getItem("view");
-        if (savedView === "landing") return "landing";
-        return token ? "dashboard" : "landing";
-    });
-    const [tab, setTab] = useState("cameras");
-    const [showOnboarding, setShowOnboarding] = useState(
-        !localStorage.getItem("onboarding_completed") && token ? true : false
-    );
+  const [token, setToken] = useState(localStorage.getItem("adminToken") || "");
+  const [view, setView] = useState(() => {
+    const savedView = localStorage.getItem("view");
+    if (savedView === "landing") return "landing";
+    return token ? "dashboard" : "landing";
+  });
+  const [tab, setTab] = useState("cameras");
+  const [showOnboarding, setShowOnboarding] = useState(
+    !localStorage.getItem("onboarding_completed") && token ? true : false
+  );
 
   const handleLoginSuccess = (newToken) => {
     setToken(newToken);
@@ -36,7 +37,7 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get("token");
     const username = urlParams.get("username");
-    
+
     if (token && username) {
       handleLoginSuccess(token);
       // Limpiar URL
@@ -51,33 +52,52 @@ function App() {
     setView("landing");
   };
 
-    const handleGetStarted = () => {
-        localStorage.setItem("view", "login");
-        setView("login");
-    };
+  const handleGetStarted = () => {
+    localStorage.setItem("view", "login");
+    setView("login");
+  };
 
-    return (
-        <ToastProvider>
-            {view === "landing" ? (
-                <LandingPage onGetStarted={handleGetStarted} />
-            ) : view === "login" ? (
-                <div
-                    style={{
-                        minHeight: "100vh",
-                        background: "radial-gradient(circle at top, #e0f2fe 0, #f5f5f7 40%)",
-                    }}
-                >
-                    <LoginForm 
-                        onLoginSuccess={handleLoginSuccess}
-                        onBackToLanding={() => {
-                            localStorage.setItem("view", "landing");
-                            setView("landing");
-                        }}
-                    />
-                </div>
-            ) : showOnboarding ? (
-                <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
-            ) : (
+  return (
+    <ToastProvider>
+      {view === "landing" ? (
+        <LandingPage onGetStarted={handleGetStarted} />
+      ) : view === "login" ? (
+        <div
+          style={{
+            minHeight: "100vh",
+            background: "radial-gradient(circle at top, #e0f2fe 0, #f5f5f7 40%)",
+          }}
+        >
+          <LoginForm
+            onLoginSuccess={handleLoginSuccess}
+            onBackToLanding={() => {
+              localStorage.setItem("view", "landing");
+              setView("landing");
+            }}
+            onNavigateToRegister={() => {
+              localStorage.setItem("view", "register");
+              setView("register");
+            }}
+          />
+        </div>
+      ) : view === "register" ? (
+        <div
+          style={{
+            minHeight: "100vh",
+            background: "radial-gradient(circle at top, #d1fae5 0, #f5f5f7 40%)",
+          }}
+        >
+          <RegisterForm
+            onRegisterSuccess={handleLoginSuccess}
+            onBackToLogin={() => {
+              localStorage.setItem("view", "login");
+              setView("login");
+            }}
+          />
+        </div>
+      ) : showOnboarding ? (
+        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+      ) : (
         <div
           style={{
             minHeight: "100vh",
@@ -87,20 +107,20 @@ function App() {
           <DashboardLayout onLogout={handleLogout}>
             {/* Tabs de Navegación */}
             <div
-                className="sticky-tabs"
-                style={{
-                    background: "#fff",
-                    borderRadius: 16,
-                    padding: 8,
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-                    border: "1px solid #e2e8f0",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 4,
-                    overflowX: "auto",
-                    WebkitOverflowScrolling: "touch",
-                    marginBottom: "clamp(24px, 4vw, 40px)",
-                }}
+              className="sticky-tabs"
+              style={{
+                background: "#fff",
+                borderRadius: 16,
+                padding: 8,
+                boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+                border: "1px solid #e2e8f0",
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 4,
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
+                marginBottom: "clamp(24px, 4vw, 40px)",
+              }}
             >
               <TabButton active={tab === "cameras"} onClick={() => setTab("cameras")}>
                 📷 Cámaras
@@ -121,17 +141,17 @@ function App() {
 
             {/* Contenido */}
             <div style={{
-                width: "100%",
-                maxWidth: "100%",
-                minWidth: 0,
-                boxSizing: "border-box",
-                display: "flex",
-                flexDirection: "column",
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
             }}>
-                {tab === "cameras" && <CamerasSection />}
-                {tab === "rules" && <RulesSection />}
-                {tab === "hits" && <HitsSection />}
-                {tab === "events" && <EventsSection />}
+              {tab === "cameras" && <CamerasSection />}
+              {tab === "rules" && <RulesSection />}
+              {tab === "hits" && <HitsSection />}
+              {tab === "events" && <EventsSection />}
             </div>
           </DashboardLayout>
         </div>

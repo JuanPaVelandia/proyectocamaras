@@ -10,3 +10,5 @@ authlib
 httpx
 python-jose[cryptography]
 python-multipart
+passlib[bcrypt]
+email-validator

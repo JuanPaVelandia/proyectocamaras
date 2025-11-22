@@ -5,8 +5,8 @@ import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { useToast } from "../../context/ToastContext";
 
-export function LoginForm({ onLoginSuccess, onBackToLanding }) {
-    const [username, setUsername] = useState("admin");
+export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegister }) {
+    const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [oauthProviders, setOauthProviders] = useState([]);
@@ -276,6 +276,27 @@ export function LoginForm({ onLoginSuccess, onBackToLanding }) {
                         >
                             ← Volver a la página principal
                         </Button>
+                    )}
+                    {onNavigateToRegister && (
+                        <div style={{ marginTop: 16, textAlign: "center" }}>
+                            <span style={{ fontSize: 14, color: "#64748b" }}>
+                                ¿No tienes cuenta?{" "}
+                            </span>
+                            <button
+                                onClick={onNavigateToRegister}
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    color: "#3b82f6",
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    textDecoration: "underline",
+                                }}
+                            >
+                                Regístrate aquí
+                            </button>
+                        </div>
                     )}
                 </div>
             </Card>
