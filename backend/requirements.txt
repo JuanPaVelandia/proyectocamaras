@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+python-dotenv
+requests
+pyjwt
+pyyaml
+authlib
+python-jose[cryptography]
+python-multipart

@@ -1,0 +1,91 @@
+version: "3.9"
+
+services:
+  # --- Broker MQTT ---
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - frigate_net
+
+  # --- Frigate NVR ---
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:0.16.0
+    container_name: frigate
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    shm_size: "64mb"
+    ports:
+      - "5000:5000"
+      - "1935:1935" # RTMP
+      - "8554:8554" # RTSP
+      - "8555:8555" # WebRTC
+    volumes:
+      - ./config/config.yml:/config/config.yml:rw  # Cambiar a rw para que el backend pueda editarlo
+      - ./media:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - frigate_net
+
+  # --- Base de Datos (PostgreSQL) ---
+  db:
+    image: postgres:15-alpine
+    container_name: frigate_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-frigate_events}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - frigate_net
+
+  # --- Backend (FastAPI) ---
+  backend:
+    build: ./backend
+    container_name: frigate_backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - ./config:/config:rw  # Montar config para poder editar config.yml
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-frigate_events}
+      - FRIGATE_CONFIG_PATH=/config/config.yml
+    networks:
+      - frigate_net
+
+  # --- Listener (Python MQTT -> HTTP) ---
+  listener:
+    build: ./python-listener
+    container_name: frigate_listener
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - backend
+    env_file:
+      - ./python-listener/.env
+    environment:
+      - MQTT_HOST=mosquitto
+      - CLOUD_API_URL=http://backend:8000/api/events/
+    networks:
+      - frigate_net
+
+networks:
+  frigate_net:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,125 @@
+version: "3.9"
+
+services:
+  # --- Broker MQTT ---
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1883:1883"  # Solo localhost en producción
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - frigate_net
+
+  # --- Frigate NVR ---
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:0.16.0
+    container_name: frigate
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    shm_size: "64mb"
+    ports:
+      - "127.0.0.1:5000:5000"  # Solo localhost, acceso vía Nginx
+    volumes:
+      - ./config/config.yml:/config/config.yml:ro
+      - ./media:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - frigate_net
+
+  # --- Base de Datos (PostgreSQL) ---
+  db:
+    image: postgres:15-alpine
+    container_name: frigate_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-frigate_events}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # Para backups
+    networks:
+      - frigate_net
+    # No exponer puerto en producción (solo acceso interno)
+
+  # --- Backend (FastAPI) ---
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: frigate_backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:8000:8000"  # Solo localhost, acceso vía Nginx
+    env_file:
+      - ./backend/.env.production
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-frigate_events}
+    networks:
+      - frigate_net
+    # Sin volumes en producción (código dentro de la imagen)
+
+  # --- Listener (Python MQTT -> HTTP) ---
+  listener:
+    build: ./python-listener
+    container_name: frigate_listener
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - backend
+    env_file:
+      - ./python-listener/.env.production
+    environment:
+      - MQTT_HOST=mosquitto
+      - CLOUD_API_URL=http://backend:8000/api/events/
+    networks:
+      - frigate_net
+
+  # --- Frontend (Nginx) ---
+  frontend:
+    build:
+      context: ../Proyecto Camaras/Frontend/rules-panel
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://tudominio.com/api}
+    container_name: frigate_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:80"  # Solo localhost, acceso vía Nginx reverse proxy
+    networks:
+      - frigate_net
+
+  # --- Nginx Reverse Proxy (SSL/HTTPS) ---
+  nginx:
+    image: nginx:alpine
+    container_name: frigate_nginx
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+      - frigate
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    networks:
+      - frigate_net
+
+networks:
+  frigate_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
