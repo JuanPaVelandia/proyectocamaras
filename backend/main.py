@@ -29,6 +29,15 @@ logging.basicConfig(
 
 app = FastAPI(title="Frigate Alert System")
 
+# Health check endpoints para Railway
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Frigate Alert System API"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
 # Configurar CORS
 # En desarrollo: localhost
 # En producción: agregar tu dominio real
