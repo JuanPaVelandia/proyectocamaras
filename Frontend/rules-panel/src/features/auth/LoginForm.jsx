@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../../services/api";
+import { api, getApiBase } from "../../services/api";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
@@ -26,7 +26,8 @@ export function LoginForm({ onLoginSuccess, onBackToLanding }) {
     };
 
     const handleOAuthLogin = (provider) => {
-        const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        // Usar la función helper para asegurar HTTPS en producción
+        const apiBase = getApiBase();
         window.location.href = `${apiBase}/api/auth/${provider}`;
     };
 

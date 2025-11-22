@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { api } from "../../services/api";
+import { api, getApiBase } from "../../services/api";
 
 function OAuthButton({ provider }) {
     const [available, setAvailable] = useState(false);
@@ -24,7 +24,8 @@ function OAuthButton({ provider }) {
     };
 
     const handleOAuthLogin = () => {
-        const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        // Usar la función helper para asegurar HTTPS en producción
+        const apiBase = getApiBase();
         window.location.href = `${apiBase}/api/auth/${provider}`;
     };
 
