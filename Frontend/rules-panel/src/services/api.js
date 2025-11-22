@@ -4,12 +4,28 @@ import axios from "axios";
 function getApiBaseUrl() {
   let apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
   
-  // Asegurar que en producción siempre use HTTPS
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    // Si estamos en HTTPS (Vercel), forzar que la API también use HTTPS
-    if (apiBase.startsWith('http://') && !apiBase.includes('localhost')) {
-      apiBase = apiBase.replace('http://', 'https://');
-      console.warn('⚠️ Se corrigió la URL del API a HTTPS:', apiBase);
+  // SIEMPRE forzar HTTPS en producción (Vercel), sin importar qué tenga la variable
+  if (typeof window !== 'undefined') {
+    const isProduction = window.location.hostname.includes('vercel.app') || 
+                         window.location.hostname.includes('railway.app') ||
+                         window.location.protocol === 'https:';
+    
+    if (isProduction) {
+      // Si estamos en producción, SIEMPRE usar HTTPS
+      // Extraer el dominio sin importar si viene con http:// o https://
+      let domain = apiBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      
+      // Si no es localhost, forzar HTTPS
+      if (!domain.includes('localhost') && !domain.includes('127.0.0.1')) {
+        apiBase = `https://${domain}`;
+        console.warn('🔒 [FORZADO] URL del API forzada a HTTPS en producción:', apiBase);
+      }
+    } else if (window.location.protocol === 'https:') {
+      // Si estamos en HTTPS pero no en producción (desarrollo con HTTPS), también forzar
+      if (apiBase.startsWith('http://') && !apiBase.includes('localhost')) {
+        apiBase = apiBase.replace('http://', 'https://');
+        console.warn('⚠️ Se corrigió la URL del API a HTTPS:', apiBase);
+      }
     }
   }
   
@@ -59,17 +75,8 @@ if (typeof window !== 'undefined' && isDevelopment) {
 
 // Función para obtener el baseURL correcto (siempre HTTPS en producción)
 function getCorrectBaseURL() {
-  let base = API_BASE;
-  
-  // Forzar HTTPS en producción
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    if (base.startsWith('http://') && !base.includes('localhost')) {
-      base = base.replace('http://', 'https://');
-      console.warn('⚠️ Se corrigió el baseURL a HTTPS:', base);
-    }
-  }
-  
-  return base;
+  // Usar la misma lógica que getApiBaseUrl para asegurar consistencia
+  return getApiBaseUrl();
 }
 
 // Crear instancia de axios con baseURL que se actualiza dinámicamente
