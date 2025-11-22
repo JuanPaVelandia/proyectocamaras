@@ -2,7 +2,21 @@ import axios from "axios";
 
 // En desarrollo: localhost
 // En producción: se usa la variable de entorno VITE_API_URL
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+let API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// Asegurar que en producción siempre use HTTPS
+if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+  // Si estamos en HTTPS (Vercel), forzar que la API también use HTTPS
+  if (API_BASE.startsWith('http://') && !API_BASE.includes('localhost')) {
+    API_BASE = API_BASE.replace('http://', 'https://');
+    console.warn('⚠️ Se corrigió la URL del API a HTTPS:', API_BASE);
+  }
+}
+
+// Log para debug
+if (typeof window !== 'undefined') {
+  console.log('🔗 URL del API configurada:', API_BASE);
+}
 
 // URL del proxy local de Frigate (solo en desarrollo/localhost)
 const FRIGATE_PROXY_URL = import.meta.env.VITE_FRIGATE_PROXY_URL || "http://localhost:8001";
