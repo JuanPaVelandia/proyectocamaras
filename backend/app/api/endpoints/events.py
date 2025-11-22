@@ -47,8 +47,11 @@ async def receive_event(
     config = load_frigate_config()
     camera_name = body.get("camera")
     
-    if config and "cameras" in config:
-        if camera_name not in config["cameras"]:
+    if config is not None:
+        # Obtener cámaras configuradas (vacío si no hay ninguna)
+        configured_cameras = config.get("cameras", {})
+        
+        if camera_name not in configured_cameras:
             logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la configuración actual.")
             # Retornamos OK para que el listener no reintente, pero no guardamos nada
             return {"status": "ignored", "reason": "camera_not_found"}
