@@ -40,6 +40,19 @@ async def receive_event(
             raise HTTPException(status_code=401, detail="Invalid API key")
 
     body = await request.json()
+    
+    # Validar si la cámara existe en la configuración
+    # Esto evita guardar eventos de cámaras eliminadas del frontend pero activas en local
+    from app.api.endpoints.cameras import load_frigate_config
+    config = load_frigate_config()
+    camera_name = body.get("camera")
+    
+    if config and "cameras" in config:
+        if camera_name not in config["cameras"]:
+            logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la configuración actual.")
+            # Retornamos OK para que el listener no reintente, pero no guardamos nada
+            return {"status": "ignored", "reason": "camera_not_found"}
+
     logging.info(f"📨 Evento recibido en backend: {body}")
 
     now = datetime.utcnow()
