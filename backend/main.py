@@ -13,7 +13,12 @@ from app.models.all_models import UserDB # Importar modelos para que se registre
 load_dotenv()
 
 # Crear tablas en DB (si no existen)
-Base.metadata.create_all(bind=engine)
+# Manejar errores de conexión a la base de datos
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    logging.warning(f"⚠️  No se pudo conectar a la base de datos al inicio: {e}")
+    logging.info("La aplicación continuará, pero algunas funciones pueden no funcionar")
 
 # Configurar Logging
 logging.basicConfig(
