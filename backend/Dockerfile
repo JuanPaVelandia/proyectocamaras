@@ -24,5 +24,5 @@ COPY . .
 # Exponer puerto
 EXPOSE 8000
 
-# Comando de inicio (Railway usa $PORT)
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Comando de inicio (usa run.py para leer PORT de Railway)
+CMD ["python", "run.py"]

@@ -126,7 +126,8 @@ def get_frigate_config():
             logger.warning(f"Error obteniendo config de Frigate: {response.status_code}")
             return None
     except Exception as e:
-        logger.error(f"Error conectando a Frigate: {e}")
+        # No loguear como error si estamos en la nube (es esperado que no pueda conectarse)
+        logger.debug(f"Frigate no disponible (esto es normal si el backend está en la nube): {e}")
         return None
 
 @router.get("/cameras")
