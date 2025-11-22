@@ -61,7 +61,7 @@ PROD_ORIGINS = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGI
 # O usar allow_origins=["*"] para desarrollo (no recomendado en producción)
 VERCEL_PATTERN = r"https://.*\.vercel\.app"
 
-origins = DEV_ORIGINS + [origin.strip() for origin in PROD_ORIGINS if origin.strip()]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
