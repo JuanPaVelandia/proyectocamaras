@@ -11,6 +11,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Ejecutar migración de cámaras (solo se ejecuta una vez, crea tabla si no existe)
+try:
+    logger.info("🔄 Ejecutando migración de base de datos...")
+    from migrate_add_cameras_table import migrate
+    migrate()
+    logger.info("✅ Migración completada")
+except Exception as e:
+    logger.warning(f"⚠️ Migración falló o ya fue ejecutada: {e}")
+
 try:
     import uvicorn
     logger.info("✅ uvicorn importado correctamente")
