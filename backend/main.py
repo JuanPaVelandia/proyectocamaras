@@ -77,6 +77,7 @@ app.include_router(api_router, prefix="/api")
 
 # Inicializar usuario admin por defecto (si es necesario)
 from app.db.session import SessionLocal
+from app.core.security import hash_password
 import os
 
 def init_default_admin():
@@ -85,17 +86,22 @@ def init_default_admin():
         count = db.query(UserDB).count()
         if count == 0:
             username = os.getenv("ADMIN_USERNAME", "admin")
-            password = os.getenv("ADMIN_PASSWORD", "admin123")
-            whatsapp = os.getenv("DEFAULT_ADMIN_WHATSAPP") or os.getenv("WHATSAPP_TARGET_NUMBER") or ""
+            password = os.getenv("ADMIN_PASSWORD", "Admin123!")
+            email = os.getenv("ADMIN_EMAIL", "admin@frigate.local")
+            whatsapp = os.getenv("DEFAULT_ADMIN_WHATSAPP") or os.getenv("WHATSAPP_TARGET_NUMBER") or "+573001234567"
+
+            # Hashear la contraseña con bcrypt
+            password_hashed = hash_password(password)
 
             user = UserDB(
                 username=username,
-                password_hash=password,
+                password_hash=password_hashed,
+                email=email,
                 whatsapp_number=whatsapp
             )
             db.add(user)
             db.commit()
-            logging.info(f"✅ Usuario admin por defecto creado: {username}")
+            logging.info(f"✅ Usuario admin por defecto creado: {username} ({email})")
     finally:
         db.close()
 

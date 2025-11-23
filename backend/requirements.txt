@@ -10,5 +10,5 @@ authlib
 httpx
 python-jose[cryptography]
 python-multipart
-passlib[bcrypt]
+bcrypt==4.1.3
 email-validator
