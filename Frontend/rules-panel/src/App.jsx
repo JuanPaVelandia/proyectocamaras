@@ -38,8 +38,17 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get("token");
     const username = urlParams.get("username");
+    const email = urlParams.get("email");
 
     if (token && username) {
+      // Guardar datos del usuario en localStorage
+      const userData = {
+        username: username,
+        email: email || "",
+        whatsapp_number: ""
+      };
+      localStorage.setItem("userData", JSON.stringify(userData));
+
       handleLoginSuccess(token);
       // Limpiar URL
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -48,6 +57,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
+    localStorage.removeItem("userData");
     localStorage.setItem("view", "landing");
     setToken("");
     setView("landing");

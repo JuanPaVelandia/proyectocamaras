@@ -72,6 +72,15 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
             });
 
             localStorage.setItem("adminToken", res.data.token);
+
+            // Guardar datos del usuario en localStorage
+            const userData = {
+                username: res.data.username,
+                email: res.data.email,
+                whatsapp_number: res.data.whatsapp_number
+            };
+            localStorage.setItem("userData", JSON.stringify(userData));
+
             addToast(`¡Bienvenido, ${res.data.username}!`, "success");
 
             setTimeout(() => {

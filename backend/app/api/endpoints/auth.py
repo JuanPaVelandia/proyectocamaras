@@ -115,18 +115,29 @@ def get_current_user(
 ) -> UserDB:
     if not x_admin_token:
         raise HTTPException(status_code=401, detail="Missing X-Admin-Token header")
-    
+
     # Verificar JWT
     payload = verify_token(x_admin_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
+
     user_id = payload.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
-    
+
     user = db.query(UserDB).get(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    
+
     return user
+
+@router.get("/me")
+def get_user_info(current_user: UserDB = Depends(get_current_user)):
+    """Obtiene la información del usuario autenticado"""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "whatsapp_number": current_user.whatsapp_number,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }

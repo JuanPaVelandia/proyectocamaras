@@ -1,5 +1,5 @@
 import React from "react";
-import { Button } from "../components/ui/Button";
+import { UserMenu } from "../components/UserMenu";
 
 export function DashboardLayout({ children, onLogout }) {
     return (
@@ -41,19 +41,7 @@ export function DashboardLayout({ children, onLogout }) {
                     </p>
                 </div>
 
-                <Button
-                    variant="secondary"
-                    onClick={onLogout}
-                    style={{
-                        fontSize: "clamp(13px, 1.8vw, 14px)",
-                        padding: "10px 20px",
-                        whiteSpace: "nowrap",
-                        fontWeight: 500,
-                        transition: "all 0.2s ease",
-                    }}
-                >
-                    Cerrar sesión
-                </Button>
+                <UserMenu onLogout={onLogout} />
             </header>
 
             <main style={{
