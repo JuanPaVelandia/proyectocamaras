@@ -22,10 +22,11 @@ def list_cameras(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Obtiene la lista de cámaras desde la base de datos"""
+    """Obtiene la lista de cámaras del usuario autenticado"""
     try:
-        cameras = db.query(CameraDB).all()
-        
+        # FILTRAR SOLO CÁMARAS DEL USUARIO ACTUAL
+        cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
+
         result = []
         for camera in cameras:
             result.append({
@@ -36,7 +37,8 @@ def list_cameras(
                 "enabled": camera.enabled,
                 "created_at": camera.created_at.isoformat() if camera.created_at else None
             })
-        
+
+        logger.info(f"🔒 Usuario {current_user.username} consultó sus {len(result)} cámaras.")
         return {"cameras": result}
     except Exception as e:
         logger.error(f"Error listando cámaras: {e}")
@@ -114,19 +116,23 @@ def delete_camera(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Elimina una cámara de la base de datos"""
+    """Elimina una cámara de la base de datos (solo si pertenece al usuario)"""
     try:
-        camera = db.query(CameraDB).filter(CameraDB.id == camera_id).first()
-        
+        # VERIFICAR QUE LA CÁMARA PERTENECE AL USUARIO
+        camera = db.query(CameraDB).filter(
+            CameraDB.id == camera_id,
+            CameraDB.user_id == current_user.id
+        ).first()
+
         if not camera:
-            raise HTTPException(status_code=404, detail="Cámara no encontrada")
-        
+            raise HTTPException(status_code=404, detail="Cámara no encontrada o no tienes permisos")
+
         camera_name = camera.name
         db.delete(camera)
         db.commit()
-        
+
         logger.info(f"🗑️ Cámara '{camera_name}' eliminada por usuario {current_user.username}")
-        
+
         return {"message": f"Cámara '{camera_name}' eliminada correctamente"}
     except HTTPException:
         raise

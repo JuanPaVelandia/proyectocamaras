@@ -91,10 +91,28 @@ async def receive_event(
 
 
 @router.get("/")
-def list_events(limit: int = 50):
+def list_events(
+    limit: int = 50,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lista eventos en memoria filtrados por cámaras del usuario autenticado"""
+    from app.models.all_models import CameraDB
+
+    # Obtener cámaras del usuario
+    user_cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
+    user_camera_names = {cam.name for cam in user_cameras}
+
     if limit <= 0:
         limit = 50
-    result = EVENTS_IN_MEMORY[-limit:]
+
+    # Filtrar eventos solo de cámaras del usuario
+    filtered_events = [
+        event for event in EVENTS_IN_MEMORY
+        if event.get("event", {}).get("camera") in user_camera_names
+    ]
+
+    result = filtered_events[-limit:]
     return {"count": len(result), "events": result}
 
 
@@ -104,23 +122,44 @@ def list_events_db(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Lista eventos de la BD filtrados por cámaras del usuario autenticado"""
+    from app.models.all_models import CameraDB
+
+    # Obtener cámaras del usuario
+    user_cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
+    user_camera_names = {cam.name for cam in user_cameras}
+
+    # Si el usuario no tiene cámaras, retornar vacío
+    if not user_camera_names:
+        logging.info(f"🔍 Usuario {current_user.username} no tiene cámaras asignadas.")
+        return {"count": 0, "events": []}
+
     rows = (
         db.query(EventDB)
         .order_by(EventDB.id.desc())
-        .limit(limit)
+        .limit(limit * 3)  # Buscar más para compensar el filtrado
         .all()
     )
-    logging.info(f"🔍 Consulta DB por usuario {current_user.username}: {len(rows)} eventos encontrados.")
 
     events = []
     for row in rows:
         payload = json.loads(row.payload)
-        events.append(
-            {
-                "id": row.id,
-                "received_at": row.received_at.isoformat() + "Z",
-                "event": payload,
-            }
-        )
+        camera_name = payload.get("camera")
+
+        # Solo incluir eventos de cámaras del usuario
+        if camera_name in user_camera_names:
+            events.append(
+                {
+                    "id": row.id,
+                    "received_at": row.received_at.isoformat() + "Z",
+                    "event": payload,
+                }
+            )
+
+        # Detener si alcanzamos el límite
+        if len(events) >= limit:
+            break
+
+    logging.info(f"🔍 Consulta DB por usuario {current_user.username}: {len(events)} eventos filtrados de {len(rows)} totales.")
 
     return {"count": len(events), "events": events}

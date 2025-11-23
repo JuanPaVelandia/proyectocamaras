@@ -1,10 +1,22 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 import requests
 import logging
 import os
 
+from app.api.endpoints.auth import get_current_user
+from app.models.all_models import UserDB
+from app.db.session import SessionLocal
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # URL de Frigate (desde variable de entorno o por defecto)
 FRIGATE_HOST = os.getenv("FRIGATE_HOST", "http://frigate:5000")
@@ -131,20 +143,22 @@ def get_frigate_config():
         return None
 
 @router.get("/cameras")
-def get_cameras():
-    """Obtiene la lista de cámaras disponibles en Frigate"""
+def get_cameras(
+    current_user: UserDB = Depends(get_current_user)
+):
+    """Obtiene la lista de cámaras disponibles en Frigate (requiere autenticación)"""
     try:
         config = get_frigate_config()
         if not config:
             # Si no se puede obtener de la API, intentar desde eventos
             # Por ahora retornar una lista vacía o valores por defecto
             return {"cameras": []}
-        
+
         cameras = []
         if "cameras" in config:
             cameras = list(config["cameras"].keys())
-        
-        logger.info(f"Cámaras obtenidas de Frigate: {cameras}")
+
+        logger.info(f"🔒 Usuario {current_user.username} consultó cámaras de Frigate: {cameras}")
         return {"cameras": cameras}
     except Exception as e:
         logger.error(f"Error obteniendo cámaras: {e}")
@@ -152,8 +166,10 @@ def get_cameras():
         return {"cameras": []}
 
 @router.get("/objects")
-def get_objects():
-    """Obtiene la lista completa de objetos detectables en Frigate (80 clases COCO) con sus traducciones"""
+def get_objects(
+    current_user: UserDB = Depends(get_current_user)
+):
+    """Obtiene la lista completa de objetos detectables en Frigate (80 clases COCO) con sus traducciones (requiere autenticación)"""
     try:
         # Siempre retornar todas las clases COCO disponibles
         objects_with_translations = []
@@ -162,10 +178,10 @@ def get_objects():
                 "value": obj,
                 "label": OBJECT_TRANSLATIONS.get(obj, obj.replace("_", " ").title())
             })
-        
+
         # Ordenar alfabéticamente por la traducción en español
         objects_with_translations.sort(key=lambda x: x["label"])
-        
+
         logger.info(f"Objetos obtenidos: {len(objects_with_translations)} (todas las clases COCO)")
         return {"objects": objects_with_translations}
     except Exception as e:
