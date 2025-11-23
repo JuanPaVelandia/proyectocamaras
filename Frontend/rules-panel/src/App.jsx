@@ -8,6 +8,7 @@ import { EventsSection } from "./features/events/EventsSection";
 import { CamerasSection } from "./features/cameras/CamerasSection";
 import { OnboardingWizard } from "./features/onboarding/OnboardingWizard";
 import { LandingPage } from "./features/landing/LandingPage";
+import DiagnosticsPage from "./features/diagnostics/DiagnosticsPage";
 import { Button } from "./components/ui/Button";
 import { ToastProvider } from "./context/ToastContext";
 import "./styles/responsive.css";
@@ -56,6 +57,18 @@ function App() {
     localStorage.setItem("view", "login");
     setView("login");
   };
+
+  // Check for debug mode
+  const urlParams = new URLSearchParams(window.location.search);
+  const debugMode = urlParams.get('debug') === 'true';
+
+  if (debugMode) {
+    return (
+      <ToastProvider>
+        <DiagnosticsPage />
+      </ToastProvider>
+    );
+  }
 
   return (
     <ToastProvider>
