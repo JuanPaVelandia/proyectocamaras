@@ -12,6 +12,7 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
         password: "",
         confirmPassword: "",
         whatsapp_number: "",
+        whatsapp_notifications_enabled: false,
     });
     const [loading, setLoading] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState(0);
@@ -69,6 +70,7 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
                 email: formData.email,
                 password: formData.password,
                 whatsapp_number: formData.whatsapp_number || null,
+                whatsapp_notifications_enabled: formData.whatsapp_notifications_enabled,
             });
 
             localStorage.setItem("adminToken", res.data.token);
@@ -229,14 +231,53 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
 
                     <label style={{ ...labelStyle, marginTop: 16 }}>WHATSAPP (Opcional)</label>
                     <Input
-                        placeholder="+573001234567"
+                        placeholder="+57 300 123 4567"
                         value={formData.whatsapp_number}
                         onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
                         style={inputStyle}
                     />
-                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, marginBottom: 12 }}>
-                        Formato internacional para recibir alertas
+                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, marginBottom: 4 }}>
+                        Para recibir alertas cuando tus cámaras detecten eventos
                     </p>
+
+                    {formData.whatsapp_number && (
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginTop: 12,
+                            marginBottom: 12,
+                            padding: "12px",
+                            background: "#f0fdf4",
+                            borderRadius: 8,
+                            border: "1px solid #86efac",
+                        }}>
+                            <input
+                                type="checkbox"
+                                id="whatsapp_notifications"
+                                checked={formData.whatsapp_notifications_enabled}
+                                onChange={(e) => setFormData({ ...formData, whatsapp_notifications_enabled: e.target.checked })}
+                                style={{
+                                    width: 18,
+                                    height: 18,
+                                    cursor: "pointer",
+                                    accentColor: "#10b981",
+                                }}
+                            />
+                            <label
+                                htmlFor="whatsapp_notifications"
+                                style={{
+                                    fontSize: 13,
+                                    color: "#166534",
+                                    cursor: "pointer",
+                                    userSelect: "none",
+                                    fontWeight: 500,
+                                }}
+                            >
+                                ✅ Recibir alertas por WhatsApp
+                            </label>
+                        </div>
+                    )}
                 </div>
 
                 <div style={{ marginTop: 32 }}>

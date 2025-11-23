@@ -11,12 +11,19 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Ejecutar migración de cámaras (solo se ejecuta una vez, crea tabla si no existe)
+# Ejecutar migraciones (solo se ejecutan una vez)
 try:
-    logger.info("🔄 Ejecutando migración de base de datos...")
-    from migrate_add_cameras_table import migrate
-    migrate()
-    logger.info("✅ Migración completada")
+    logger.info("🔄 Ejecutando migraciones de base de datos...")
+
+    # Migración 1: Tabla de cámaras
+    from migrate_add_cameras_table import migrate as migrate_cameras
+    migrate_cameras()
+
+    # Migración 2: Campo whatsapp_notifications_enabled
+    from migrate_add_whatsapp_enabled import migrate as migrate_whatsapp
+    migrate_whatsapp()
+
+    logger.info("✅ Migraciones completadas")
 except Exception as e:
     logger.warning(f"⚠️ Migración falló o ya fue ejecutada: {e}")
 

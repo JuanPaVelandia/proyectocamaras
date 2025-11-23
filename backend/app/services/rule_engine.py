@@ -107,7 +107,8 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
             )
 
             # Enviar WhatsApp al número del dueño de la regla
-            if rule.user and rule.user.whatsapp_number:
+            # (solo si tiene número y notificaciones habilitadas)
+            if rule.user and rule.user.whatsapp_number and rule.user.whatsapp_notifications_enabled:
                 # Usar mensaje personalizado o mensaje por defecto
                 if rule.custom_message:
                     # Reemplazar variables en el mensaje personalizado
@@ -152,10 +153,12 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                 else:
                     send_whatsapp_message(msg, to_number=rule.user.whatsapp_number)
             else:
-                logging.info(
-                    f"ℹ️ Regla {rule.id} no tiene usuario o whatsapp_number configurado. "
-                    "No se envía WhatsApp."
-                )
+                if not rule.user:
+                    logging.info(f"ℹ️ Regla {rule.id} no tiene usuario asignado. No se envía WhatsApp.")
+                elif not rule.user.whatsapp_number:
+                    logging.info(f"ℹ️ Usuario {rule.user.username} no tiene número de WhatsApp configurado. No se envía WhatsApp.")
+                elif not rule.user.whatsapp_notifications_enabled:
+                    logging.info(f"ℹ️ Usuario {rule.user.username} tiene notificaciones de WhatsApp desactivadas. No se envía WhatsApp.")
     except Exception as e:
         logging.error(f"❌ Error en evaluate_rules: {e}")
     finally:

@@ -10,14 +10,15 @@ class UserDB(Base):
     username = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=True)  # Nullable para usuarios OAuth
     whatsapp_number = Column(String(50), nullable=True)
-    
+    whatsapp_notifications_enabled = Column(Boolean, default=False)  # Si quiere recibir notificaciones por WhatsApp
+
     # OAuth fields
     oauth_provider = Column(String(50), nullable=True)  # 'google', 'facebook', etc.
     oauth_id = Column(String(255), nullable=True)  # ID del usuario en el proveedor OAuth
     email = Column(String(255), unique=True, nullable=False, index=True)
     full_name = Column(String(255), nullable=True)
     avatar_url = Column(String(500), nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     rules = relationship("RuleDB", back_populates="user")

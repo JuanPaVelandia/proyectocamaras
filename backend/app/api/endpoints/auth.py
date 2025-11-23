@@ -22,7 +22,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     whatsapp_number: Optional[str] = None
-    
+    whatsapp_notifications_enabled: Optional[bool] = False
+
     @validator('username')
     def validate_username(cls, v):
         if not v or len(v) < 3 or len(v) > 20:
@@ -30,7 +31,7 @@ class RegisterRequest(BaseModel):
         if not re.match(r'^[a-zA-Z0-9_-]+$', v):
             raise ValueError('El username solo puede contener letras, números, guiones y guiones bajos')
         return v.lower()
-    
+
     @validator('password')
     def validate_password(cls, v):
         if len(v) < 8:
@@ -40,7 +41,7 @@ class RegisterRequest(BaseModel):
         if not re.search(r'[0-9]', v):
             raise ValueError('La contraseña debe contener al menos un número')
         return v
-    
+
     @validator('whatsapp_number')
     def validate_whatsapp(cls, v):
         if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
@@ -68,7 +69,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         username=req.username,
         email=req.email,
         password_hash=hashed_password,
-        whatsapp_number=req.whatsapp_number
+        whatsapp_number=req.whatsapp_number,
+        whatsapp_notifications_enabled=req.whatsapp_notifications_enabled
     )
     
     db.add(new_user)

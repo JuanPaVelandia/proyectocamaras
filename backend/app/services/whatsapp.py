@@ -1,10 +1,33 @@
+"""
+Servicio de WhatsApp - Arquitectura Simplificada
+
+ARQUITECTURA:
+- Un único WhatsApp del admin/sistema envía mensajes a todos los usuarios
+- Token y Phone Number ID configurados en variables de entorno:
+  * WHATSAPP_TOKEN: Token de acceso del WhatsApp Business API
+  * WHATSAPP_PHONE_NUMBER_ID: ID del número de WhatsApp del sistema
+
+- Los usuarios solo necesitan:
+  * Registrar su número de WhatsApp (whatsapp_number)
+  * Activar notificaciones (whatsapp_notifications_enabled = True)
+
+- El sistema envía notificaciones DESDE el WhatsApp del admin HACIA los usuarios
+"""
+
 import os
 import logging
 import requests
 
 def send_whatsapp_message(text: str, to_number: str) -> bool:
     """
-    Envía mensaje de WhatsApp al número indicado (propio del usuario).
+    Envía mensaje de WhatsApp desde el WhatsApp del sistema al número indicado.
+
+    Args:
+        text: Contenido del mensaje
+        to_number: Número de WhatsApp destino (del usuario que recibirá la alerta)
+
+    Returns:
+        True si se envió exitosamente, False en caso contrario
     """
     token = os.getenv("WHATSAPP_TOKEN")
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
