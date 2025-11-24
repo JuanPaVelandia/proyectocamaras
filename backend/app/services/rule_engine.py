@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Dict, Any
 from datetime import datetime, time
 from app.db.session import SessionLocal
@@ -139,8 +140,9 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                 
                 # Intentar obtener snapshot URL
                 snapshot_url = None
-                frigate_host = "http://frigate:5000"  # URL interna de Frigate
-                
+                # URL de Frigate (interna en Docker o pública si está expuesto)
+                frigate_host = os.getenv("FRIGATE_HOST", "http://frigate:5000")
+
                 # Frigate genera snapshots en: /api/events/{event_id}/snapshot.jpg
                 frigate_event_id = event_body.get("event_id")
                 if frigate_event_id:
