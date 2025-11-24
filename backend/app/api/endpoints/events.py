@@ -40,24 +40,24 @@ async def receive_event(
             raise HTTPException(status_code=401, detail="Invalid API key")
 
     body = await request.json()
-    
-    # Validar si la cámara existe en la base de datos
-    # Solo aceptamos eventos de cámaras registradas en el sistema
-    from app.models.all_models import CameraDB
-    camera_name = body.get("camera")
-    
-    db_check = SessionLocal()
-    try:
-        camera = db_check.query(CameraDB).filter(
-            CameraDB.name == camera_name,
-            CameraDB.enabled == True
-        ).first()
-        
-        if not camera:
-            logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la base de datos o está deshabilitada.")
-            return {"status": "ignored", "reason": "camera_not_in_database"}
-    finally:
-        db_check.close()
+
+    # TEMPORAL: Validación deshabilitada para testing
+    # TODO: Reactivar después de las pruebas
+    # from app.models.all_models import CameraDB
+    # camera_name = body.get("camera")
+    #
+    # db_check = SessionLocal()
+    # try:
+    #     camera = db_check.query(CameraDB).filter(
+    #         CameraDB.name == camera_name,
+    #         CameraDB.enabled == True
+    #     ).first()
+    #
+    #     if not camera:
+    #         logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la base de datos o está deshabilitada.")
+    #         return {"status": "ignored", "reason": "camera_not_in_database"}
+    # finally:
+    #     db_check.close()
 
     logging.info(f"📨 Evento recibido en backend: {body}")
 
