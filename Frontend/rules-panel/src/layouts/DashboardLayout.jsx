@@ -1,7 +1,7 @@
 import React from "react";
 import { UserMenu } from "../components/UserMenu";
 
-export function DashboardLayout({ children, onLogout }) {
+export function DashboardLayout({ children, onLogout, onNavigateToProfile }) {
     return (
         <div style={{
             width: "100%",
@@ -41,7 +41,7 @@ export function DashboardLayout({ children, onLogout }) {
                     </p>
                 </div>
 
-                <UserMenu onLogout={onLogout} />
+                <UserMenu onLogout={onLogout} onNavigateToProfile={onNavigateToProfile} />
             </header>
 
             <main style={{

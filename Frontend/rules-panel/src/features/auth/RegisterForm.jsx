@@ -3,7 +3,9 @@ import { api } from "../../services/api";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
+import { PhoneInput } from "../../components/ui/PhoneInput";
 import { useToast } from "../../context/ToastContext";
+import { isValidPhoneNumber } from "react-phone-number-input";
 
 export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
     const [formData, setFormData] = useState({
@@ -16,6 +18,7 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
     });
     const [loading, setLoading] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState(0);
+    const [phoneError, setPhoneError] = useState("");
     const { addToast } = useToast();
 
     const calculatePasswordStrength = (password) => {
@@ -32,6 +35,16 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
     const handlePasswordChange = (value) => {
         setFormData({ ...formData, password: value });
         setPasswordStrength(calculatePasswordStrength(value));
+    };
+
+    const handlePhoneChange = (value) => {
+        setFormData({ ...formData, whatsapp_number: value || "" });
+        setPhoneError("");
+
+        // Validar si el número es válido
+        if (value && !isValidPhoneNumber(value)) {
+            setPhoneError("Número de teléfono inválido");
+        }
     };
 
     const getStrengthColor = () => {
@@ -60,6 +73,13 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
 
         if (passwordStrength < 3) {
             addToast("La contraseña es muy débil. Usa al menos 8 caracteres, una mayúscula y un número", "error");
+            return;
+        }
+
+        // Validar WhatsApp si está presente
+        if (formData.whatsapp_number && !isValidPhoneNumber(formData.whatsapp_number)) {
+            addToast("Número de WhatsApp inválido. Verifica el formato", "error");
+            setPhoneError("Número de teléfono inválido");
             return;
         }
 
@@ -230,14 +250,14 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
                     />
 
                     <label style={{ ...labelStyle, marginTop: 16 }}>WHATSAPP (Opcional)</label>
-                    <Input
-                        placeholder="+57 300 123 4567"
+                    <PhoneInput
                         value={formData.whatsapp_number}
-                        onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
-                        style={inputStyle}
+                        onChange={handlePhoneChange}
+                        placeholder="311 226 4829"
+                        error={phoneError}
                     />
-                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, marginBottom: 4 }}>
-                        Para recibir alertas cuando tus cámaras detecten eventos
+                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 4, marginBottom: phoneError ? 8 : 4 }}>
+                        Selecciona tu país e ingresa tu número para recibir alertas
                     </p>
 
                     {formData.whatsapp_number && (

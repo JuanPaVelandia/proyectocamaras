@@ -141,5 +141,78 @@ def get_user_info(current_user: UserDB = Depends(get_current_user)):
         "username": current_user.username,
         "email": current_user.email,
         "whatsapp_number": current_user.whatsapp_number,
+        "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
+class UpdateProfileRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    whatsapp_number: Optional[str] = None
+    whatsapp_notifications_enabled: Optional[bool] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+    @validator('whatsapp_number')
+    def validate_whatsapp(cls, v):
+        if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
+            raise ValueError('Número de WhatsApp inválido (formato internacional: +573001234567)')
+        return v
+
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if v:
+            if len(v) < 8:
+                raise ValueError('La contraseña debe tener al menos 8 caracteres')
+            if not re.search(r'[A-Z]', v):
+                raise ValueError('La contraseña debe contener al menos una mayúscula')
+            if not re.search(r'[0-9]', v):
+                raise ValueError('La contraseña debe contener al menos un número')
+        return v
+
+@router.put("/me")
+def update_user_profile(
+    req: UpdateProfileRequest,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Actualiza el perfil del usuario autenticado"""
+
+    # Si quiere cambiar email, verificar que no esté en uso
+    if req.email and req.email != current_user.email:
+        existing_email = db.query(UserDB).filter(UserDB.email == req.email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="El email ya está registrado")
+        current_user.email = req.email
+
+    # Actualizar WhatsApp
+    if req.whatsapp_number is not None:
+        current_user.whatsapp_number = req.whatsapp_number if req.whatsapp_number else None
+
+    if req.whatsapp_notifications_enabled is not None:
+        current_user.whatsapp_notifications_enabled = req.whatsapp_notifications_enabled
+
+    # Cambiar contraseña (requiere contraseña actual)
+    if req.new_password:
+        if not req.current_password:
+            raise HTTPException(status_code=400, detail="Debes proporcionar tu contraseña actual")
+
+        if not verify_password(req.current_password, current_user.password_hash):
+            raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
+
+        current_user.password_hash = hash_password(req.new_password)
+
+    db.commit()
+    db.refresh(current_user)
+
+    logging.info(f"✅ Perfil actualizado: {current_user.username}")
+
+    return {
+        "message": "Perfil actualizado exitosamente",
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "whatsapp_number": current_user.whatsapp_number,
+            "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled
+        }
     }

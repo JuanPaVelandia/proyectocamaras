@@ -6,6 +6,7 @@ import { RulesSection } from "./features/rules/RulesSection";
 import { HitsSection } from "./features/dashboard/HitsSection";
 import { EventsSection } from "./features/events/EventsSection";
 import { CamerasSection } from "./features/cameras/CamerasSection";
+import { ProfilePage } from "./features/profile/ProfilePage";
 import { OnboardingWizard } from "./features/onboarding/OnboardingWizard";
 import { LandingPage } from "./features/landing/LandingPage";
 import DiagnosticsPage from "./features/diagnostics/DiagnosticsPage";
@@ -127,40 +128,42 @@ function App() {
             background: "#f8fafc",
           }}
         >
-          <DashboardLayout onLogout={handleLogout}>
-            {/* Tabs de Navegación */}
-            <div
-              className="sticky-tabs"
-              style={{
-                background: "#fff",
-                borderRadius: 16,
-                padding: 8,
-                boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-                border: "1px solid #e2e8f0",
-                display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
-                gap: 4,
-                overflowX: "auto",
-                WebkitOverflowScrolling: "touch",
-                marginBottom: "clamp(24px, 4vw, 40px)",
-              }}
-            >
-              <TabButton active={tab === "cameras"} onClick={() => setTab("cameras")}>
-                📷 Cámaras
-              </TabButton>
-              <TabButton active={tab === "rules"} onClick={() => setTab("rules")}>
-                ⚙️ Reglas
-              </TabButton>
-              <TabButton active={tab === "hits"} onClick={() => setTab("hits")}>
-                🔔 Activaciones
-              </TabButton>
-              <TabButton
-                active={tab === "events"}
-                onClick={() => setTab("events")}
+          <DashboardLayout onLogout={handleLogout} onNavigateToProfile={() => setTab("profile")}>
+            {/* Mostrar tabs de navegación solo si no estamos en perfil */}
+            {tab !== "profile" && (
+              <div
+                className="sticky-tabs"
+                style={{
+                  background: "#fff",
+                  borderRadius: 16,
+                  padding: 8,
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+                  border: "1px solid #e2e8f0",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: 4,
+                  overflowX: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  marginBottom: "clamp(24px, 4vw, 40px)",
+                }}
               >
-                📊 Eventos
-              </TabButton>
-            </div>
+                <TabButton active={tab === "cameras"} onClick={() => setTab("cameras")}>
+                  📷 Cámaras
+                </TabButton>
+                <TabButton active={tab === "rules"} onClick={() => setTab("rules")}>
+                  ⚙️ Reglas
+                </TabButton>
+                <TabButton active={tab === "hits"} onClick={() => setTab("hits")}>
+                  🔔 Activaciones
+                </TabButton>
+                <TabButton
+                  active={tab === "events"}
+                  onClick={() => setTab("events")}
+                >
+                  📊 Eventos
+                </TabButton>
+              </div>
+            )}
 
             {/* Contenido */}
             <div style={{
@@ -175,6 +178,7 @@ function App() {
               {tab === "rules" && <RulesSection />}
               {tab === "hits" && <HitsSection />}
               {tab === "events" && <EventsSection />}
+              {tab === "profile" && <ProfilePage onBack={() => setTab("cameras")} />}
             </div>
           </DashboardLayout>
         </div>

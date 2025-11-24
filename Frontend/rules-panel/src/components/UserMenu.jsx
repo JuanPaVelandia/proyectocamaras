@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useToast } from "../context/ToastContext";
 import { api } from "../services/api";
 
-export function UserMenu({ onLogout }) {
+export function UserMenu({ onLogout, onNavigateToProfile }) {
     const [isOpen, setIsOpen] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -208,8 +208,9 @@ export function UserMenu({ onLogout }) {
                             text="Mi Perfil"
                             onClick={() => {
                                 setIsOpen(false);
-                                // Navigate to profile - placeholder for now
-                                console.log("Navigate to /perfil");
+                                if (onNavigateToProfile) {
+                                    onNavigateToProfile();
+                                }
                             }}
                         />
                         <MenuItem
