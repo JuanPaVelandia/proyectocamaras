@@ -65,16 +65,29 @@ Espera ~2 minutos mientras descarga las imágenes.
    - ✅ Activa: "Recibir alertas por WhatsApp"
 3. **Crear Cuenta**
 
-### Paso 5: Configurar tu Primera Cámara
+### Paso 5: Registrar tu Cámara en el Panel Web
+
+⚠️ **IMPORTANTE: Primero regístrala en el panel web, luego configúrala en Frigate**
+
+1. **Ve al panel web:** https://tu-panel-web.vercel.app
+2. **Pestaña "Cámaras"** → **"+ Nueva Cámara"**
+3. Registra tu cámara:
+   - **Nombre:** `cam_recibo` (recuerda este nombre exacto)
+   - **Descripción:** "Cámara del recibo"
+4. **Crear Cámara**
+
+### Paso 6: Configurar la Cámara en Frigate
+
+⚠️ **El nombre DEBE ser EXACTAMENTE igual al registrado en el panel web**
 
 1. **En Frigate** (http://localhost:5000):
    - Ve a **Settings → Config Editor**
 
-2. **Agrega tu cámara:**
+2. **Agrega tu cámara con el MISMO nombre:**
 
 ```yaml
 cameras:
-  mi_camara:
+  cam_recibo:  # ⚠️ Debe coincidir EXACTAMENTE con el panel web
     enabled: true
     ffmpeg:
       inputs:
@@ -100,13 +113,13 @@ cameras:
 docker-compose -f docker-compose.client.yml restart frigate
 ```
 
-### Paso 6: Crear Reglas desde el Panel Web
+### Paso 7: Crear Reglas desde el Panel Web
 
 1. **Ve al panel web** donde creaste tu cuenta
 2. **Pestaña "Reglas"** → **"+ Nueva Regla"**
 3. Configura:
    - **Nombre:** "Persona en la entrada"
-   - **Cámara:** `mi_camara`
+   - **Cámara:** `cam_recibo` (selecciona de la lista)
    - **Objetos:** `person`
    - **Score mínimo:** `0.7`
 4. **Crear Regla**
@@ -279,6 +292,37 @@ docker-compose -f docker-compose.client.yml ps
    curl https://proyectocamaras-production.up.railway.app/health
    ```
 
+### Eventos no aparecen en el panel web
+
+**Problema:** Frigate detecta objetos pero no aparecen eventos en el panel web.
+
+**Causa más común:** El nombre de la cámara en Frigate NO coincide con el nombre registrado en el panel web.
+
+**Solución:**
+1. **Verifica el nombre en el panel web:**
+   - Ve a "Cámaras" en el panel web
+   - Anota el nombre exacto (ej: `cam_recibo`)
+
+2. **Verifica el nombre en Frigate:**
+   - Abre http://localhost:5000
+   - Ve a Settings → Config Editor
+   - Busca la sección `cameras:`
+   - El nombre debe ser **EXACTAMENTE** igual
+
+3. **Si los nombres NO coinciden:**
+   - Edita `config.yml` en Frigate
+   - Cambia el nombre de la cámara al correcto
+   - Guarda y reinicia:
+     ```bash
+     docker-compose -f docker-compose.client.yml restart frigate
+     ```
+
+4. **Verifica que lleguen eventos nuevos:**
+   ```bash
+   docker-compose -f docker-compose.client.yml logs -f listener
+   ```
+   - Debes ver: `camera=cam_recibo` (el nombre correcto)
+
 ### No llegan alertas de WhatsApp
 
 **Problema:** Los eventos llegan al backend pero no recibes WhatsApp.
@@ -293,8 +337,8 @@ docker-compose -f docker-compose.client.yml ps
    - Asegúrate de que la cámara coincida con el nombre en Frigate
 
 3. Verifica que el nombre de la cámara sea correcto:
-   - En Frigate: `mi_camara`
-   - En la regla: `mi_camara` (debe coincidir exactamente)
+   - En Frigate: `cam_recibo`
+   - En la regla: `cam_recibo` (debe coincidir exactamente)
 
 ### Cámara no se conecta
 
