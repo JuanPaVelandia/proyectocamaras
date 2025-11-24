@@ -20,7 +20,34 @@ Sistema completo de monitoreo de cámaras con detección de objetos por IA, aler
 
 ---
 
-## 🚀 Instalación Rápida (5 minutos)
+## 📦 Dos Modos de Instalación
+
+### 🏠 Modo Cliente (Recomendado para la mayoría)
+
+**Usa el backend centralizado en la nube. Solo instalas Frigate localmente.**
+
+- ✅ **Instalación en 3 minutos**
+- ✅ No necesitas base de datos propia
+- ✅ No necesitas backend propio
+- ✅ Accede al panel web desde cualquier lugar
+- ✅ Backend actualizado automáticamente
+
+👉 **[Ver guía de instalación cliente →](README.CLIENT.md)**
+
+### 🖥️ Modo Completo (Self-hosted)
+
+**Instalación completa con tu propio backend y base de datos.**
+
+- ⚙️ Control total del sistema
+- 🔒 Datos 100% en tu servidor
+- 🛠️ Personalización avanzada
+- 📊 Base de datos propia
+
+👉 **Continúa leyendo esta guía para instalación completa**
+
+---
+
+## 🚀 Instalación Completa (Self-hosted)
 
 ### Requisitos Previos
 
