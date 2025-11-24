@@ -63,6 +63,11 @@ services:
       # ⚠️ IMPORTANTE: Cambia esta URL por tu backend en Railway
       - CLOUD_API_URL=https://proyectocamaras-production.up.railway.app/api/events/
       - CLOUD_API_KEY=super-token-secreto
+      # Mapeo de cámaras: nombre_local:nombre_panel_web
+      # Ejemplo: si en Frigate tienes "camara_entrada" pero en el panel web la registraste como "cam_recibo"
+      # - CAMERA_MAPPING=camara_entrada:cam_recibo
+      # Para múltiples cámaras: camara1:cam_recibo,camara2:cam_cocina
+      - CAMERA_MAPPING=cam_apto:cam_recibo
     networks:
       - frigate_net
 

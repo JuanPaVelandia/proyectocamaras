@@ -99,23 +99,18 @@ def list_events(
     """Lista eventos en memoria filtrados por cámaras del usuario autenticado"""
     from app.models.all_models import CameraDB
 
-    # TEMPORAL: Filtrado deshabilitado para testing
-    # TODO: Reactivar después de las pruebas
-    # # Obtener cámaras del usuario
-    # user_cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
-    # user_camera_names = {cam.name for cam in user_cameras}
+    # Obtener cámaras del usuario
+    user_cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
+    user_camera_names = {cam.name for cam in user_cameras}
 
     if limit <= 0:
         limit = 50
 
-    # # Filtrar eventos solo de cámaras del usuario
-    # filtered_events = [
-    #     event for event in EVENTS_IN_MEMORY
-    #     if event.get("event", {}).get("camera") in user_camera_names
-    # ]
-
-    # TEMPORAL: Retornar todos los eventos sin filtrar
-    filtered_events = EVENTS_IN_MEMORY
+    # Filtrar eventos solo de cámaras del usuario
+    filtered_events = [
+        event for event in EVENTS_IN_MEMORY
+        if event.get("event", {}).get("camera") in user_camera_names
+    ]
 
     result = filtered_events[-limit:]
     return {"count": len(result), "events": result}
@@ -130,21 +125,19 @@ def list_events_db(
     """Lista eventos de la BD filtrados por cámaras del usuario autenticado"""
     from app.models.all_models import CameraDB
 
-    # TEMPORAL: Filtrado deshabilitado para testing
-    # TODO: Reactivar después de las pruebas
-    # # Obtener cámaras del usuario
-    # user_cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
-    # user_camera_names = {cam.name for cam in user_cameras}
-    #
-    # # Si el usuario no tiene cámaras, retornar vacío
-    # if not user_camera_names:
-    #     logging.info(f"🔍 Usuario {current_user.username} no tiene cámaras asignadas.")
-    #     return {"count": 0, "events": []}
+    # Obtener cámaras del usuario
+    user_cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
+    user_camera_names = {cam.name for cam in user_cameras}
+
+    # Si el usuario no tiene cámaras, retornar vacío
+    if not user_camera_names:
+        logging.info(f"🔍 Usuario {current_user.username} no tiene cámaras asignadas.")
+        return {"count": 0, "events": []}
 
     rows = (
         db.query(EventDB)
         .order_by(EventDB.id.desc())
-        .limit(limit)  # TEMPORAL: Sin multiplicador ya que no hay filtrado
+        .limit(limit * 3)  # Buscar más para compensar el filtrado
         .all()
     )
 
@@ -153,21 +146,20 @@ def list_events_db(
         payload = json.loads(row.payload)
         camera_name = payload.get("camera")
 
-        # TEMPORAL: Incluir todos los eventos sin filtrar
-        # # Solo incluir eventos de cámaras del usuario
-        # if camera_name in user_camera_names:
-        events.append(
-            {
-                "id": row.id,
-                "received_at": row.received_at.isoformat() + "Z",
-                "event": payload,
-            }
-        )
+        # Solo incluir eventos de cámaras del usuario
+        if camera_name in user_camera_names:
+            events.append(
+                {
+                    "id": row.id,
+                    "received_at": row.received_at.isoformat() + "Z",
+                    "event": payload,
+                }
+            )
 
-        # # Detener si alcanzamos el límite
-        # if len(events) >= limit:
-        #     break
+        # Detener si alcanzamos el límite
+        if len(events) >= limit:
+            break
 
-    logging.info(f"🔍 Consulta DB por usuario {current_user.username}: {len(events)} eventos retornados (filtrado temporal deshabilitado).")
+    logging.info(f"🔍 Consulta DB por usuario {current_user.username}: {len(events)} eventos filtrados de {len(rows)} totales.")
 
     return {"count": len(events), "events": events}

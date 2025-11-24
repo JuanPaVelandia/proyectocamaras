@@ -29,6 +29,17 @@ MQTT_TOPIC = os.getenv("MQTT_TOPIC", "frigate/events/#")
 CUSTOMER_ID = os.getenv("CUSTOMER_ID", "cliente_demo")
 SITE_ID = os.getenv("SITE_ID", "sede_demo")
 
+# Mapeo de nombres de cámaras: local_name:remote_name,local_name2:remote_name2
+CAMERA_MAPPING_STR = os.getenv("CAMERA_MAPPING", "")
+CAMERA_MAPPING = {}
+if CAMERA_MAPPING_STR:
+    for mapping in CAMERA_MAPPING_STR.split(","):
+        mapping = mapping.strip()
+        if ":" in mapping:
+            local_name, remote_name = mapping.split(":", 1)
+            CAMERA_MAPPING[local_name.strip()] = remote_name.strip()
+    logging.info(f"📋 Mapeo de cámaras configurado: {CAMERA_MAPPING}")
+
 if not CLOUD_API_URL:
     raise RuntimeError("❌ CLOUD_API_URL no está definida en .env")
 
@@ -78,6 +89,13 @@ def normalize_frigate_event(data: dict) -> dict:
 
     event_id = base.get("id")
     camera = base.get("camera")
+
+    # Aplicar mapeo de nombre de cámara si existe
+    if camera and camera in CAMERA_MAPPING:
+        original_camera = camera
+        camera = CAMERA_MAPPING[camera]
+        logging.info(f"🔄 Cámara mapeada: '{original_camera}' → '{camera}'")
+
     label = base.get("label")
     sub_label = base.get("sub_label")
     top_score = base.get("top_score")

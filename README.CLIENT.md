@@ -67,27 +67,23 @@ Espera ~2 minutos mientras descarga las imágenes.
 
 ### Paso 5: Registrar tu Cámara en el Panel Web
 
-⚠️ **IMPORTANTE: Primero regístrala en el panel web, luego configúrala en Frigate**
-
 1. **Ve al panel web:** https://tu-panel-web.vercel.app
 2. **Pestaña "Cámaras"** → **"+ Nueva Cámara"**
 3. Registra tu cámara:
-   - **Nombre:** `cam_recibo` (recuerda este nombre exacto)
+   - **Nombre:** `cam_recibo` (anota este nombre)
    - **Descripción:** "Cámara del recibo"
 4. **Crear Cámara**
 
 ### Paso 6: Configurar la Cámara en Frigate
 
-⚠️ **El nombre DEBE ser EXACTAMENTE igual al registrado en el panel web**
-
 1. **En Frigate** (http://localhost:5000):
    - Ve a **Settings → Config Editor**
 
-2. **Agrega tu cámara con el MISMO nombre:**
+2. **Agrega tu cámara** (puedes usar cualquier nombre local):
 
 ```yaml
 cameras:
-  cam_recibo:  # ⚠️ Debe coincidir EXACTAMENTE con el panel web
+  mi_camara_entrada:  # Puedes usar el nombre que quieras
     enabled: true
     ffmpeg:
       inputs:
@@ -113,7 +109,41 @@ cameras:
 docker-compose -f docker-compose.client.yml restart frigate
 ```
 
-### Paso 7: Crear Reglas desde el Panel Web
+### Paso 7: Mapear el Nombre de la Cámara (NUEVO)
+
+💡 **Si el nombre en Frigate NO coincide con el del panel web**, configura el mapeo:
+
+1. **Edita** `docker-compose.client.yml`
+2. **Busca** la sección del listener y **descomenta/edita** la línea de CAMERA_MAPPING:
+
+```yaml
+listener:
+  environment:
+    # ...otras variables...
+    # Mapea: nombre_en_frigate:nombre_en_panel_web
+    - CAMERA_MAPPING=mi_camara_entrada:cam_recibo
+```
+
+Para múltiples cámaras, separa con comas:
+```yaml
+    - CAMERA_MAPPING=mi_camara_entrada:cam_recibo,mi_camara_cocina:cam_cocina
+```
+
+3. **Reinicia el listener:**
+
+```bash
+docker-compose -f docker-compose.client.yml restart listener
+```
+
+4. **Verifica en los logs** que el mapeo funciona:
+
+```bash
+docker-compose -f docker-compose.client.yml logs -f listener
+```
+
+Debes ver: `🔄 Cámara mapeada: 'mi_camara_entrada' → 'cam_recibo'`
+
+### Paso 8: Crear Reglas desde el Panel Web
 
 1. **Ve al panel web** donde creaste tu cuenta
 2. **Pestaña "Reglas"** → **"+ Nueva Regla"**
@@ -296,32 +326,38 @@ docker-compose -f docker-compose.client.yml ps
 
 **Problema:** Frigate detecta objetos pero no aparecen eventos en el panel web.
 
-**Causa más común:** El nombre de la cámara en Frigate NO coincide con el nombre registrado en el panel web.
+**Causa:** El nombre de la cámara enviado al backend NO coincide con el registrado en el panel web.
 
-**Solución:**
+**Solución A - Mapeo de cámaras (Recomendado):**
+
 1. **Verifica el nombre en el panel web:**
-   - Ve a "Cámaras" en el panel web
-   - Anota el nombre exacto (ej: `cam_recibo`)
+   - Ve a "Cámaras" → anota el nombre (ej: `cam_recibo`)
 
 2. **Verifica el nombre en Frigate:**
-   - Abre http://localhost:5000
-   - Ve a Settings → Config Editor
-   - Busca la sección `cameras:`
-   - El nombre debe ser **EXACTAMENTE** igual
+   - http://localhost:5000 → Settings → Config Editor
+   - Busca `cameras:` → anota el nombre (ej: `mi_camara_entrada`)
 
-3. **Si los nombres NO coinciden:**
-   - Edita `config.yml` en Frigate
-   - Cambia el nombre de la cámara al correcto
-   - Guarda y reinicia:
-     ```bash
-     docker-compose -f docker-compose.client.yml restart frigate
-     ```
+3. **Configura el mapeo en docker-compose.client.yml:**
+   ```yaml
+   listener:
+     environment:
+       - CAMERA_MAPPING=mi_camara_entrada:cam_recibo
+   ```
 
-4. **Verifica que lleguen eventos nuevos:**
+4. **Reinicia el listener:**
+   ```bash
+   docker-compose -f docker-compose.client.yml restart listener
+   ```
+
+5. **Verifica en los logs:**
    ```bash
    docker-compose -f docker-compose.client.yml logs -f listener
    ```
-   - Debes ver: `camera=cam_recibo` (el nombre correcto)
+   Debes ver: `🔄 Cámara mapeada: 'mi_camara_entrada' → 'cam_recibo'`
+
+**Solución B - Cambiar nombre en Frigate:**
+
+Si prefieres no usar mapeo, cambia el nombre en Frigate para que coincida exactamente con el panel web, luego reinicia Frigate.
 
 ### No llegan alertas de WhatsApp
 
