@@ -52,7 +52,9 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
             if rule.min_score is not None:
                 if score is None or float(score) < float(rule.min_score):
                     match = False
-                    reasons.append(f"score too low (min={rule.min_score}, actual={score})")
+                    reasons.append(f"score too low (min={rule.min_score} [type:{type(rule.min_score)}], actual={score} [type:{type(score)}], comparison: {float(score) if score else 'None'} < {float(rule.min_score)})")
+                else:
+                    logging.info(f"✅ Score OK: {float(score)} >= {float(rule.min_score)}")
             if rule.min_duration_seconds is not None:
                 if duration is None or float(duration) < float(rule.min_duration_seconds):
                     match = False
