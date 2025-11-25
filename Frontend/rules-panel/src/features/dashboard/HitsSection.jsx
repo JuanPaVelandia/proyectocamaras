@@ -12,7 +12,7 @@ export function HitsSection() {
     const loadHits = async () => {
         setLoading(true);
         try {
-            const res = await api.get("/api/rules/hits?limit=50");
+            const res = await api.get("/api/rules/hits?limit=20");
             setHits(res.data.hits);
         } catch (err) {
             console.error(err);

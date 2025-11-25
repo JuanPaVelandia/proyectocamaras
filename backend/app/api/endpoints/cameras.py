@@ -138,28 +138,24 @@ def list_cameras(
 
         result = []
         for camera in cameras:
-            # Buscar el último evento con snapshot de esta cámara
+            # Buscar el último evento con snapshot de esta cámara usando SQL directo (más rápido)
             last_snapshot = None
             last_event_time = None
 
+            # Query SQL optimizado con LIKE en lugar de parsear JSON
             last_event = (
                 db.query(EventDB)
-                .filter(EventDB.snapshot_base64.isnot(None))
+                .filter(
+                    EventDB.snapshot_base64.isnot(None),
+                    EventDB.payload.like(f'%"camera": "{camera.name}"%')
+                )
                 .order_by(EventDB.id.desc())
-                .limit(100)  # Buscar en los últimos 100 eventos
-                .all()
+                .first()  # Solo necesitamos el primero
             )
 
-            # Filtrar por nombre de cámara parseando el payload
-            for event in last_event:
-                try:
-                    payload = json.loads(event.payload)
-                    if payload.get("camera") == camera.name:
-                        last_snapshot = event.snapshot_base64
-                        last_event_time = event.received_at.isoformat() if event.received_at else None
-                        break
-                except Exception:
-                    continue
+            if last_event:
+                last_snapshot = last_event.snapshot_base64
+                last_event_time = last_event.received_at.isoformat() if last_event.received_at else None
 
             result.append({
                 "id": camera.id,
