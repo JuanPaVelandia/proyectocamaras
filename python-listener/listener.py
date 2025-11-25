@@ -2,6 +2,7 @@ import os
 import json
 import time
 import logging
+import base64
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
@@ -29,6 +30,9 @@ MQTT_TOPIC = os.getenv("MQTT_TOPIC", "frigate/events/#")
 CUSTOMER_ID = os.getenv("CUSTOMER_ID", "cliente_demo")
 SITE_ID = os.getenv("SITE_ID", "sede_demo")
 
+# URL de Frigate local para descargar snapshots
+FRIGATE_URL = os.getenv("FRIGATE_URL", "http://frigate:5000")
+
 # Mapeo de nombres de cámaras: local_name:remote_name,local_name2:remote_name2
 CAMERA_MAPPING_STR = os.getenv("CAMERA_MAPPING", "")
 CAMERA_MAPPING = {}
@@ -42,6 +46,28 @@ if CAMERA_MAPPING_STR:
 
 if not CLOUD_API_URL:
     raise RuntimeError("❌ CLOUD_API_URL no está definida en .env")
+
+
+# ---------- Función para descargar snapshot de Frigate ----------
+def download_snapshot(event_id: str) -> str:
+    """Descarga el snapshot de Frigate y lo retorna como base64."""
+    try:
+        snapshot_url = f"{FRIGATE_URL}/api/events/{event_id}/snapshot.jpg"
+        logging.info(f"📸 Descargando snapshot: {snapshot_url}")
+
+        resp = requests.get(snapshot_url, timeout=5)
+
+        if resp.status_code == 200:
+            # Convertir a base64
+            snapshot_b64 = base64.b64encode(resp.content).decode('utf-8')
+            logging.info(f"✔ Snapshot descargado ({len(resp.content)} bytes)")
+            return snapshot_b64
+        else:
+            logging.warning(f"⚠ No se pudo descargar snapshot: {resp.status_code}")
+            return None
+    except Exception as e:
+        logging.error(f"❌ Error descargando snapshot: {e}")
+        return None
 
 
 # ---------- Función para enviar evento a la nube ----------
@@ -227,6 +253,16 @@ def on_message(client, userdata, msg):
         f"type={normalized_event.get('frigate_type')}, "
         f"id={normalized_event.get('event_id')}"
     )
+
+    # Descargar snapshot si tiene has_snapshot y es evento 'end'
+    event_id = normalized_event.get('event_id')
+    has_snapshot = normalized_event.get('has_snapshot')
+    frigate_type = normalized_event.get('frigate_type')
+
+    if event_id and has_snapshot and frigate_type == 'end':
+        snapshot_b64 = download_snapshot(event_id)
+        if snapshot_b64:
+            normalized_event['snapshot_base64'] = snapshot_b64
 
     send_event_to_cloud(normalized_event)
 

@@ -38,9 +38,17 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                 if label and label.lower() not in rule_labels:
                     match = False
                     reasons.append(f"label mismatch (esperaba uno de {rule_labels}, recibió '{label}')")
-            if rule.frigate_type and rule.frigate_type != frigate_type:
-                match = False
-                reasons.append(f"type mismatch (esperaba '{rule.frigate_type}', recibió '{frigate_type}')")
+            # Solo activar en eventos 'new' o 'end', ignorar 'update' para evitar spam
+            # Si la regla especifica un tipo, respetarlo. Si no, solo activar en 'new' y 'end'
+            if rule.frigate_type:
+                if rule.frigate_type != frigate_type:
+                    match = False
+                    reasons.append(f"type mismatch (esperaba '{rule.frigate_type}', recibió '{frigate_type}')")
+            else:
+                # Si no se especifica tipo, solo activar en 'new' y 'end' (no en 'update' para evitar spam)
+                if frigate_type not in ['new', 'end']:
+                    match = False
+                    reasons.append(f"ignoring update events (type='{frigate_type}')")
             if rule.min_score is not None:
                 if score is None or float(score) < float(rule.min_score):
                     match = False
@@ -138,20 +146,16 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                         f"Evento ID: {event_db_id}"
                     )
                 
-                # Intentar obtener snapshot URL
-                snapshot_url = None
-                # URL de Frigate (interna en Docker o pública si está expuesto)
-                frigate_host = os.getenv("FRIGATE_HOST", "http://frigate:5000")
+                # Obtener snapshot de la base de datos
+                snapshot_b64 = None
+                event_record = db.query(EventDB).filter(EventDB.id == event_db_id).first()
+                if event_record and event_record.snapshot_base64:
+                    snapshot_b64 = event_record.snapshot_base64
+                    logging.info(f"📸 Snapshot encontrado en BD ({len(snapshot_b64)} chars)")
 
-                # Frigate genera snapshots en: /api/events/{event_id}/snapshot.jpg
-                frigate_event_id = event_body.get("event_id")
-                if frigate_event_id:
-                    snapshot_url = f"{frigate_host}/api/events/{frigate_event_id}/snapshot.jpg"
-                    logging.info(f"📸 Snapshot URL: {snapshot_url}")
-                
-                # Enviar con imagen si tenemos snapshot_url
-                if snapshot_url:
-                    send_whatsapp_image(snapshot_url, msg, to_number=rule.user.whatsapp_number)
+                # Enviar con imagen si tenemos snapshot
+                if snapshot_b64:
+                    send_whatsapp_image(snapshot_b64, msg, to_number=rule.user.whatsapp_number, is_base64=True)
                 else:
                     send_whatsapp_message(msg, to_number=rule.user.whatsapp_number)
             else:

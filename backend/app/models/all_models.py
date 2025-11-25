@@ -30,6 +30,7 @@ class EventDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     received_at = Column(DateTime, index=True)
     payload = Column(Text)
+    snapshot_base64 = Column(Text, nullable=True)  # Snapshot en base64
 
     rule_hits = relationship("RuleHitDB", back_populates="event")
 

@@ -69,11 +69,15 @@ async def receive_event(
     }
     EVENTS_IN_MEMORY.append(wrapped_event)
 
+    # Extraer snapshot_base64 si viene en el body
+    snapshot_b64 = body.pop('snapshot_base64', None)
+
     db = SessionLocal()
     try:
         db_event = EventDB(
             received_at=now,
-            payload=json.dumps(body)
+            payload=json.dumps(body),
+            snapshot_base64=snapshot_b64
         )
         db.add(db_event)
         db.commit()

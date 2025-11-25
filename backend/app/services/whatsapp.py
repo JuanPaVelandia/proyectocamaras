@@ -17,6 +17,7 @@ ARQUITECTURA:
 import os
 import logging
 import requests
+import base64
 
 def send_whatsapp_message(text: str, to_number: str) -> bool:
     """
@@ -79,9 +80,15 @@ def send_whatsapp_message(text: str, to_number: str) -> bool:
         return False
 
 
-def send_whatsapp_image(image_url: str, caption: str, to_number: str) -> bool:
+def send_whatsapp_image(image_url: str, caption: str, to_number: str, is_base64: bool = False) -> bool:
     """
-    Descarga una imagen desde Frigate y la envía por WhatsApp.
+    Envía una imagen por WhatsApp.
+
+    Args:
+        image_url: URL de la imagen O string base64 si is_base64=True
+        caption: Texto del mensaje
+        to_number: Número destino
+        is_base64: Si True, image_url es un string base64 en lugar de URL
     """
     token = os.getenv("WHATSAPP_TOKEN")
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
@@ -95,19 +102,25 @@ def send_whatsapp_image(image_url: str, caption: str, to_number: str) -> bool:
         return False
 
     try:
-        # Paso 1: Descargar la imagen desde Frigate
-        logging.info(f"📥 Descargando snapshot desde: {image_url}")
-        img_response = requests.get(image_url, timeout=10)
-        
-        if img_response.status_code != 200:
-            logging.error(f"❌ Error descargando snapshot: {img_response.status_code}")
-            return send_whatsapp_message(caption, to_number)  # Fallback a mensaje de texto
-        
+        # Paso 1: Obtener los bytes de la imagen
+        if is_base64:
+            logging.info(f"📥 Decodificando snapshot desde base64")
+            img_content = base64.b64decode(image_url)
+        else:
+            logging.info(f"📥 Descargando snapshot desde: {image_url}")
+            img_response = requests.get(image_url, timeout=10)
+
+            if img_response.status_code != 200:
+                logging.error(f"❌ Error descargando snapshot: {img_response.status_code}")
+                return send_whatsapp_message(caption, to_number)  # Fallback a mensaje de texto
+
+            img_content = img_response.content
+
         # Paso 2: Subir la imagen a WhatsApp
         upload_url = f"https://graph.facebook.com/v17.0/{phone_number_id}/media"
-        
+
         files = {
-            'file': ('snapshot.jpg', img_response.content, 'image/jpeg'),
+            'file': ('snapshot.jpg', img_content, 'image/jpeg'),
         }
         
         upload_headers = {
