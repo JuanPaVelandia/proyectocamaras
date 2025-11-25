@@ -157,6 +157,7 @@ def list_events_db(
                     "id": row.id,
                     "received_at": row.received_at.isoformat() + "Z",
                     "event": payload,
+                    "snapshot_base64": row.snapshot_base64,  # Incluir snapshot para mostrar en frontend
                 }
             )
 

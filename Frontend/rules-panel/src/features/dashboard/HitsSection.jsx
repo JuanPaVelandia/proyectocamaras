@@ -64,42 +64,113 @@ export function HitsSection() {
                     <ButtonRefresh onClick={loadHits} loading={loading} />
                 </div>
 
-                <div style={{ overflowX: "auto", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
-                    <table style={{ width: "100%", maxWidth: "100%", borderCollapse: "collapse", fontSize: "clamp(13px, 1.8vw, 14px)", minWidth: "600px", boxSizing: "border-box" }}>
-                        <thead>
-                            <tr style={{ textAlign: "left", color: "#64748b", borderBottom: "2px solid #f1f5f9" }}>
-                                <th style={{ padding: "12px 8px" }}>HORA</th>
-                                <th style={{ padding: "12px 8px" }}>REGLA ID</th>
-                                <th style={{ padding: "12px 8px" }}>EVENTO ID</th>
-                                <th style={{ padding: "12px 8px" }}>ACCIÓN</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {hits.map((hit) => (
-                                <tr key={hit.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                    <td style={{ padding: "12px 8px", color: "#334155" }}>
-                                        {new Date(hit.triggered_at).toLocaleString()}
-                                    </td>
-                                    <td style={{ padding: "12px 8px", fontFamily: "monospace" }}>
-                                        #{hit.rule_id}
-                                    </td>
-                                    <td style={{ padding: "12px 8px", fontFamily: "monospace", color: "#64748b" }}>
-                                        {hit.event_id}
-                                    </td>
-                                    <td style={{ padding: "12px 8px" }}>
-                                        <Badge variant="success">WhatsApp Enviado</Badge>
-                                    </td>
-                                </tr>
-                            ))}
-                            {!loading && hits.length === 0 && (
-                                <tr>
-                                    <td colSpan="4" style={{ textAlign: "center", padding: 30, color: "#94a3b8" }}>
-                                        No hay alertas registradas aún.
-                                    </td>
-                                </tr>
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))",
+                    gap: "clamp(12px, 2vw, 16px)",
+                    width: "100%",
+                    maxWidth: "100%",
+                    boxSizing: "border-box",
+                }}>
+                    {hits.map((hit) => (
+                        <div
+                            key={hit.id}
+                            style={{
+                                border: "2px solid #cbd5e1",
+                                padding: "clamp(16px, 2vw, 20px)",
+                                borderRadius: 16,
+                                background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 12,
+                                transition: "all 0.3s ease",
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = "translateY(-2px)";
+                                e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.12)";
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = "translateY(0)";
+                                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                            }}
+                        >
+                            {hit.snapshot_base64 && (
+                                <img
+                                    src={`data:image/jpeg;base64,${hit.snapshot_base64}`}
+                                    alt="Snapshot"
+                                    style={{
+                                        width: "100%",
+                                        height: "180px",
+                                        objectFit: "cover",
+                                        borderRadius: 8,
+                                        marginBottom: 12,
+                                    }}
+                                />
                             )}
-                        </tbody>
-                    </table>
+                            <div style={{ flex: 1 }}>
+                                <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    marginBottom: 8,
+                                    flexWrap: "wrap",
+                                }}>
+                                    <Badge variant="success">🔔 {hit.rule_name || `Regla #${hit.rule_id}`}</Badge>
+                                    <span style={{
+                                        fontSize: "clamp(11px, 1.8vw, 13px)",
+                                        color: "#94a3b8",
+                                    }}>
+                                        {new Date(hit.triggered_at).toLocaleString()}
+                                    </span>
+                                </div>
+                                {hit.event_data && (
+                                    <>
+                                        <div style={{
+                                            fontSize: "clamp(14px, 2vw, 16px)",
+                                            fontWeight: 600,
+                                            color: "#1e293b",
+                                            marginBottom: 8,
+                                        }}>
+                                            📷 {hit.event_data.camera} - {hit.event_data.label}
+                                        </div>
+                                        <div style={{
+                                            display: "flex",
+                                            gap: 12,
+                                            flexWrap: "wrap",
+                                        }}>
+                                            {hit.event_data.score && (
+                                                <Badge variant="neutral">
+                                                    Score: {Math.round((hit.event_data.score || 0) * 100)}%
+                                                </Badge>
+                                            )}
+                                            <Badge variant="neutral">
+                                                Evento #{hit.event_id}
+                                            </Badge>
+                                        </div>
+                                    </>
+                                )}
+                                {!hit.event_data && (
+                                    <div style={{
+                                        fontSize: "clamp(12px, 1.8vw, 14px)",
+                                        color: "#94a3b8",
+                                    }}>
+                                        Evento #{hit.event_id}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {!loading && hits.length === 0 && (
+                        <div style={{
+                            textAlign: "center",
+                            padding: 40,
+                            color: "#94a3b8",
+                            gridColumn: "1 / -1",
+                        }}>
+                            No hay alertas registradas aún.
+                        </div>
+                    )}
                 </div>
             </Card>
             <style>

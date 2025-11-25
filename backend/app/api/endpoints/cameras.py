@@ -5,10 +5,11 @@ import logging
 import yaml
 import os
 import subprocess
+import json
 
 from app.db.session import SessionLocal
 from app.api.endpoints.auth import get_current_user
-from app.models.all_models import UserDB, CameraDB
+from app.models.all_models import UserDB, CameraDB, EventDB
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -130,20 +131,45 @@ def list_cameras(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Obtiene la lista de cámaras del usuario autenticado"""
+    """Obtiene la lista de cámaras del usuario autenticado con último snapshot"""
     try:
         # FILTRAR SOLO CÁMARAS DEL USUARIO ACTUAL
         cameras = db.query(CameraDB).filter(CameraDB.user_id == current_user.id).all()
 
         result = []
         for camera in cameras:
+            # Buscar el último evento con snapshot de esta cámara
+            last_snapshot = None
+            last_event_time = None
+
+            last_event = (
+                db.query(EventDB)
+                .filter(EventDB.snapshot_base64.isnot(None))
+                .order_by(EventDB.id.desc())
+                .limit(100)  # Buscar en los últimos 100 eventos
+                .all()
+            )
+
+            # Filtrar por nombre de cámara parseando el payload
+            for event in last_event:
+                try:
+                    payload = json.loads(event.payload)
+                    if payload.get("camera") == camera.name:
+                        last_snapshot = event.snapshot_base64
+                        last_event_time = event.received_at.isoformat() if event.received_at else None
+                        break
+                except Exception:
+                    continue
+
             result.append({
                 "id": camera.id,
                 "name": camera.name,
                 "rtsp_url": camera.rtsp_url or "",
                 "description": camera.description or "",
                 "enabled": camera.enabled,
-                "created_at": camera.created_at.isoformat() if camera.created_at else None
+                "created_at": camera.created_at.isoformat() if camera.created_at else None,
+                "last_snapshot": last_snapshot,
+                "last_event_time": last_event_time
             })
 
         logger.info(f"🔒 Usuario {current_user.username} consultó sus {len(result)} cámaras.")

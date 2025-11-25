@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 import logging
+import json
 
 from app.db.session import SessionLocal
-from app.models.all_models import RuleDB, RuleHitDB, UserDB
+from app.models.all_models import RuleDB, RuleHitDB, UserDB, EventDB
 from app.api.endpoints.events import get_current_user # Reutilizar dependency
 
 router = APIRouter()
@@ -95,11 +96,33 @@ def list_rule_hits(
 
     hits = []
     for h in rows:
+        # Obtener información del evento asociado
+        event_data = None
+        snapshot_base64 = None
+        if h.event:
+            try:
+                event_payload = json.loads(h.event.payload)
+                event_data = {
+                    "camera": event_payload.get("camera"),
+                    "label": event_payload.get("label"),
+                    "score": event_payload.get("score") or event_payload.get("top_score"),
+                    "frigate_type": event_payload.get("frigate_type"),
+                }
+                snapshot_base64 = h.event.snapshot_base64
+            except Exception as e:
+                logger.error(f"Error parseando evento {h.event_id}: {e}")
+
+        # Obtener nombre de la regla
+        rule_name = h.rule.name if h.rule else "Desconocida"
+
         hits.append(
             {
                 "id": h.id,
                 "rule_id": h.rule_id,
+                "rule_name": rule_name,
                 "event_id": h.event_id,
+                "event_data": event_data,
+                "snapshot_base64": snapshot_base64,
                 "triggered_at": h.triggered_at.isoformat() + "Z",
                 "action": h.action,
             }

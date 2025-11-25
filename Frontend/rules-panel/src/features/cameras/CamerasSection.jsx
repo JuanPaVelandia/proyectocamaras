@@ -364,6 +364,19 @@ export function CamerasSection() {
                                     e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
                                 }}
                             >
+                                {camera.last_snapshot && (
+                                    <img
+                                        src={`data:image/jpeg;base64,${camera.last_snapshot}`}
+                                        alt={`Vista de ${camera.name}`}
+                                        style={{
+                                            width: "100%",
+                                            height: "180px",
+                                            objectFit: "cover",
+                                            borderRadius: 8,
+                                            marginBottom: 12,
+                                        }}
+                                    />
+                                )}
                                 <div style={{ flex: 1 }}>
                                     <div style={{
                                         display: "flex",
@@ -380,6 +393,15 @@ export function CamerasSection() {
                                             {camera.name}
                                         </strong>
                                     </div>
+                                    {camera.last_event_time && (
+                                        <div style={{
+                                            fontSize: "clamp(11px, 1.8vw, 12px)",
+                                            color: "#94a3b8",
+                                            marginBottom: 8,
+                                        }}>
+                                            Última captura: {new Date(camera.last_event_time).toLocaleString()}
+                                        </div>
+                                    )}
                                     <div style={{
                                         fontSize: "clamp(12px, 2vw, 14px)",
                                         color: "#64748b",
