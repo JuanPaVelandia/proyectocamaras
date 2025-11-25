@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any
 from datetime import datetime, time
 from app.db.session import SessionLocal
-from app.models.all_models import RuleDB, RuleHitDB
+from app.models.all_models import RuleDB, RuleHitDB, EventDB
 from app.services.whatsapp import send_whatsapp_message, send_whatsapp_image
 
 def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
