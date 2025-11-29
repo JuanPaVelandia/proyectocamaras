@@ -511,6 +511,40 @@ async def api_add_camera(payload: dict):
 async def api_discovery_add(payload: dict):
     return await api_add_camera(payload)
 
+
+def remove_camera_from_config(name: str) -> bool:
+    try:
+        if not os.path.exists(CONFIG_PATH):
+            logger.warning("CONFIG_PATH no existe; no se puede escribir config.yml")
+            return False
+        with open(CONFIG_PATH, 'r') as f:
+            cfg = yaml.safe_load(f.read() or "{}") or {}
+        cams = cfg.get('cameras') or {}
+        if name in cams:
+            del cams[name]
+            cfg['cameras'] = cams
+            with open(CONFIG_PATH, 'w') as f:
+                yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            logger.info(f"🗑️ Cámara '{name}' eliminada de {CONFIG_PATH}")
+            return True
+        logger.info(f"ℹ️ Cámara '{name}' no estaba en config.yml")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error eliminando cámara de config.yml: {e}")
+        return False
+
+
+@app.post("/api/cameras/delete")
+async def api_delete_camera(payload: dict):
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Falta 'name'")
+    ok = remove_camera_from_config(name)
+    reloaded = reload_frigate_http() if ok else False
+    if ok and not reloaded:
+        reloaded = reload_frigate_mqtt()
+    return {"removed_from_config": ok, "reloaded": reloaded}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8001))
