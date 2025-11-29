@@ -14,6 +14,7 @@ import ipaddress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Tuple
 import threading
+from urllib.parse import urlparse
 try:
     from onvif import ONVIFCamera
     ONVIF_AVAILABLE = True
@@ -512,7 +513,23 @@ async def api_discovery_add(payload: dict):
     return await api_add_camera(payload)
 
 
-def remove_camera_from_config(name: str) -> bool:
+def _normalize_rtsp_for_compare(rtsp: str) -> str:
+    try:
+        if not rtsp:
+            return ""
+        u = urlparse(rtsp)
+        netloc = u.netloc
+        if "@" in netloc:
+            netloc = netloc.split("@", 1)[1]
+        # Lowercase host and scheme, keep path
+        hostport = netloc.lower()
+        path = u.path or "/"
+        return f"{hostport}{path}"
+    except Exception:
+        return rtsp.lower()
+
+
+def remove_camera_from_config(name: str, rtsp_url: str | None = None) -> bool:
     try:
         if not os.path.exists(CONFIG_PATH):
             logger.warning("CONFIG_PATH no existe; no se puede escribir config.yml")
@@ -527,7 +544,24 @@ def remove_camera_from_config(name: str) -> bool:
                 yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
             logger.info(f"🗑️ Cámara '{name}' eliminada de {CONFIG_PATH}")
             return True
-        logger.info(f"ℹ️ Cámara '{name}' no estaba en config.yml")
+        # Intentar buscar por RTSP si se proporcionó
+        if rtsp_url:
+            target = _normalize_rtsp_for_compare(rtsp_url)
+            for cam_name, cam_conf in list(cams.items()):
+                try:
+                    inputs = cam_conf.get('ffmpeg', {}).get('inputs', [])
+                    for inp in inputs:
+                        p = inp.get('path')
+                        if p and _normalize_rtsp_for_compare(p) == target:
+                            del cams[cam_name]
+                            cfg['cameras'] = cams
+                            with open(CONFIG_PATH, 'w') as f:
+                                yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+                            logger.info(f"🗑️ Cámara '{cam_name}' (por RTSP) eliminada de {CONFIG_PATH}")
+                            return True
+                except Exception:
+                    continue
+        logger.info(f"ℹ️ Cámara '{name}' no estaba en config.yml y no se encontró por RTSP")
         return False
     except Exception as e:
         logger.error(f"❌ Error eliminando cámara de config.yml: {e}")
@@ -537,9 +571,10 @@ def remove_camera_from_config(name: str) -> bool:
 @app.post("/api/cameras/delete")
 async def api_delete_camera(payload: dict):
     name = (payload.get("name") or "").strip()
+    rtsp_url = (payload.get("rtsp_url") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Falta 'name'")
-    ok = remove_camera_from_config(name)
+    ok = remove_camera_from_config(name, rtsp_url or None)
     reloaded = reload_frigate_http() if ok else False
     if ok and not reloaded:
         reloaded = reload_frigate_mqtt()

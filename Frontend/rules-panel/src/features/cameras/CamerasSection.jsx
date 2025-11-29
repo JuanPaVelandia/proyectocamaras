@@ -118,7 +118,7 @@ export function CamerasSection() {
         }
     };
 
-    const handleDeleteCamera = async (cameraId, cameraName) => {
+    const handleDeleteCamera = async (cameraId, cameraName, cameraRtsp) => {
         if (!window.confirm(`¿Estás seguro de que quieres eliminar esta cámara?`)) {
             return;
         }
@@ -126,7 +126,7 @@ export function CamerasSection() {
         try {
             // Eliminar primero de Frigate local (si es posible)
             try {
-                await frigateProxy.post("/api/cameras/delete", { name: cameraName });
+                await frigateProxy.post("/api/cameras/delete", { name: cameraName, rtsp_url: cameraRtsp || "" });
             } catch (e) {
                 console.warn("No se pudo eliminar la cámara en Frigate local", e);
             }
@@ -587,7 +587,7 @@ export function CamerasSection() {
                                         border: "1px solid #fecaca",
                                         marginTop: "auto",
                                     }}
-                                    onClick={() => handleDeleteCamera(camera.id, camera.name)}
+                                    onClick={() => handleDeleteCamera(camera.id, camera.name, camera.rtsp_url)}
                                 >
                                     🗑️ Eliminar Cámara
                                 </Button>
