@@ -37,9 +37,9 @@ services:
     restart: unless-stopped
     depends_on:
       - mosquitto
-    shm_size: "64mb"
+    shm_size: "512mb"
     ports:
-      - "5000:5000"
+      - "5001:5000"
       - "1935:1935" # RTMP
       - "8554:8554" # RTSP
       - "8555:8555" # WebRTC
@@ -68,6 +68,24 @@ services:
       # - CAMERA_MAPPING=camara_entrada:cam_recibo
       # Para múltiples cámaras: camara1:cam_recibo,camara2:cam_cocina
       - CAMERA_MAPPING=cam_apto:cam_recibo
+    networks:
+      - frigate_net
+
+  # --- Frigate Local Proxy (opcional) ---
+  # Permite que el panel web agregue cámaras a Frigate sin editar config.yml
+  frigate-proxy:
+    build: ./frigate-proxy
+    container_name: frigate_proxy
+    restart: unless-stopped
+    depends_on:
+      - frigate
+    environment:
+      - FRIGATE_HOST=http://frigate:5000
+      - FRIGATE_CONFIG_PATH=/config/config.yml
+    volumes:
+      - ./config:/config:rw
+    ports:
+      - "8001:8001"
     networks:
       - frigate_net
 

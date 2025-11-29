@@ -4,6 +4,8 @@ import time
 import logging
 import base64
 from datetime import datetime, timezone
+from threading import Thread, Event
+from urllib.parse import urlparse
 
 import paho.mqtt.client as mqtt
 import requests
@@ -19,6 +21,7 @@ logging.basicConfig(
 
 # ---------- Configuración desde variables de entorno ----------
 CLOUD_API_URL = os.getenv("CLOUD_API_URL")
+CLOUD_API_BASE = os.getenv("CLOUD_API_BASE")
 CLOUD_API_KEY = os.getenv("CLOUD_API_KEY")
 
 MQTT_HOST = os.getenv("MQTT_HOST", "127.0.0.1")
@@ -34,18 +37,30 @@ SITE_ID = os.getenv("SITE_ID", "sede_demo")
 FRIGATE_URL = os.getenv("FRIGATE_URL", "http://frigate:5000")
 
 # Mapeo de nombres de cámaras: local_name:remote_name,local_name2:remote_name2
-CAMERA_MAPPING_STR = os.getenv("CAMERA_MAPPING", "")
+ENV_CAMERA_MAPPING_STR = os.getenv("CAMERA_MAPPING", "")
 CAMERA_MAPPING = {}
-if CAMERA_MAPPING_STR:
-    for mapping in CAMERA_MAPPING_STR.split(","):
+if ENV_CAMERA_MAPPING_STR:
+    for mapping in ENV_CAMERA_MAPPING_STR.split(","):
         mapping = mapping.strip()
         if ":" in mapping:
             local_name, remote_name = mapping.split(":", 1)
             CAMERA_MAPPING[local_name.strip()] = remote_name.strip()
-    logging.info(f"📋 Mapeo de cámaras configurado: {CAMERA_MAPPING}")
+    logging.info(f"📋 Mapeo de cámaras (ENV) configurado: {CAMERA_MAPPING}")
 
 if not CLOUD_API_URL:
     raise RuntimeError("❌ CLOUD_API_URL no está definida en .env")
+
+
+# ---------- Helper: Compute API base ----------
+def compute_api_base() -> str:
+    if CLOUD_API_BASE:
+        return CLOUD_API_BASE.rstrip("/")
+    # Try derive from events URL
+    # Expect something like: https://host/api/events/
+    url = CLOUD_API_URL.rstrip("/")
+    if url.endswith("/api/events"):
+        return url.rsplit("/api/events", 1)[0]
+    return url  # fallback
 
 
 # ---------- Función para descargar snapshot de Frigate ----------
@@ -227,6 +242,115 @@ def normalize_frigate_event(data: dict) -> dict:
     return normalized
 
 
+# ---------- Dynamic mapping sync ----------
+def normalize_rtsp(rtsp: str) -> str:
+    try:
+        if not rtsp:
+            return ""
+        # strip credentials
+        if "@" in rtsp and rtsp.startswith("rtsp://"):
+            prefix, rest = rtsp.split("//", 1)
+            creds_and_host = rest
+            if "@" in creds_and_host:
+                after_at = creds_and_host.split("@", 1)[1]
+                return f"rtsp://{after_at}".lower().rstrip("/")
+        return rtsp.lower().rstrip("/")
+    except Exception:
+        return rtsp or ""
+
+
+def fetch_backend_cameras() -> list[dict]:
+    try:
+        base = compute_api_base()
+        url = f"{base}/api/cameras/ingest-mapping"
+        headers = {"Content-Type": "application/json"}
+        if CLOUD_API_KEY:
+            headers["Authorization"] = f"Bearer {CLOUD_API_KEY}"
+        r = requests.get(url, headers=headers, timeout=7)
+        if 200 <= r.status_code < 300:
+            data = r.json()
+            return data.get("cameras", [])
+        logging.warning(f"⚠ Ingest mapping HTTP {r.status_code}: {r.text}")
+        return []
+    except Exception as e:
+        logging.error(f"❌ Error obteniendo ingest mapping: {e}")
+        return []
+
+
+def fetch_frigate_inputs() -> dict:
+    try:
+        # Get config from Frigate
+        resp = requests.get(f"{FRIGATE_URL}/api/config", timeout=5)
+        if resp.status_code != 200:
+            return {}
+        cfg = resp.json() or {}
+        cams = cfg.get("cameras", {}) or {}
+        result = {}
+        for name, conf in cams.items():
+            inputs = []
+            try:
+                inputs_list = conf.get("ffmpeg", {}).get("inputs", [])
+                for inp in inputs_list:
+                    path = inp.get("path")
+                    if path:
+                        inputs.append(normalize_rtsp(path))
+            except Exception:
+                pass
+            result[name] = inputs
+        return result
+    except Exception as e:
+        logging.error(f"❌ Error obteniendo config de Frigate: {e}")
+        return {}
+
+
+def build_dynamic_mapping() -> dict:
+    """Build mapping local_name -> backend_name using RTSP match when names differ.
+    If names equal, keep identity. Merge with ENV mapping (ENV has priority).
+    """
+    mapping = dict(CAMERA_MAPPING)  # start with ENV
+    try:
+        backend_cams = fetch_backend_cameras()
+        frigate_inputs = fetch_frigate_inputs()
+        # index backend by normalized rtsp
+        rtsp_to_backend_name = {}
+        for cam in backend_cams:
+            n = cam.get("name")
+            rtsp = normalize_rtsp(cam.get("rtsp_url") or "")
+            if rtsp:
+                rtsp_to_backend_name[rtsp] = n
+        # identity for exact name matches
+        for local_name in frigate_inputs.keys():
+            if local_name in mapping:
+                continue
+            # If backend has camera with same name, map identity
+            if any(c.get("name") == local_name for c in backend_cams):
+                mapping[local_name] = local_name
+                continue
+            # else try RTSP match
+            inputs = frigate_inputs.get(local_name, [])
+            for path in inputs:
+                if path in rtsp_to_backend_name:
+                    mapping[local_name] = rtsp_to_backend_name[path]
+                    break
+        logging.info(f"🔁 Mapeo dinámico de cámaras: {mapping}")
+    except Exception as e:
+        logging.error(f"❌ Error construyendo mapeo dinámico: {e}")
+    return mapping
+
+
+STOP_EVENT = Event()
+
+
+def mapping_refresher_loop(interval_sec: int = 60):
+    global CAMERA_MAPPING
+    while not STOP_EVENT.is_set():
+        CAMERA_MAPPING = build_dynamic_mapping()
+        for _ in range(interval_sec):
+            if STOP_EVENT.is_set():
+                break
+            time.sleep(1)
+
+
 # ---------- Callbacks MQTT ----------
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
@@ -276,6 +400,10 @@ def main():
 
     client.on_connect = on_connect
     client.on_message = on_message
+
+    # start mapping refresher thread
+    t = Thread(target=mapping_refresher_loop, kwargs={"interval_sec": 90}, daemon=True)
+    t.start()
 
     while True:
         try:
