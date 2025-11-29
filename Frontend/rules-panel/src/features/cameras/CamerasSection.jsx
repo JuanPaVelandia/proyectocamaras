@@ -76,6 +76,19 @@ export function CamerasSection() {
             await api.post("/api/cameras", form);
             addToast("Cámara agregada correctamente", "success");
 
+            // Escribir también en Frigate local vía proxy
+            try {
+                const path = form.stream_path?.startsWith("/") ? form.stream_path : `/${form.stream_path || ''}`;
+                const user = form.username ? encodeURIComponent(form.username) : "";
+                const pass = form.password ? encodeURIComponent(form.password) : "";
+                const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
+                const port = form.port || "554";
+                const rtsp = `rtsp://${auth}${form.ip}:${port}${path}`;
+                await frigateProxy.post("/api/cameras/add", { name: form.name, rtsp_url: rtsp });
+            } catch (e) {
+                console.warn("No se pudo agregar la cámara en Frigate local", e);
+            }
+
             // Reiniciar Frigate para aplicar cambios
             try {
                 const restartRes = await api.post("/api/cameras/restart-frigate");
@@ -105,12 +118,19 @@ export function CamerasSection() {
         }
     };
 
-    const handleDeleteCamera = async (cameraId) => {
+    const handleDeleteCamera = async (cameraId, cameraName) => {
         if (!window.confirm(`¿Estás seguro de que quieres eliminar esta cámara?`)) {
             return;
         }
 
         try {
+            // Eliminar primero de Frigate local (si es posible)
+            try {
+                await frigateProxy.post("/api/cameras/delete", { name: cameraName });
+            } catch (e) {
+                console.warn("No se pudo eliminar la cámara en Frigate local", e);
+            }
+
             await api.delete(`/api/cameras/${cameraId}`);
             addToast("Cámara eliminada correctamente", "success");
 
@@ -567,7 +587,7 @@ export function CamerasSection() {
                                         border: "1px solid #fecaca",
                                         marginTop: "auto",
                                     }}
-                                    onClick={() => handleDeleteCamera(camera.id)}
+                                    onClick={() => handleDeleteCamera(camera.id, camera.name)}
                                 >
                                     🗑️ Eliminar Cámara
                                 </Button>
