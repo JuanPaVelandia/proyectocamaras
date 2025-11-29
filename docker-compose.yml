@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     depends_on:
       - mosquitto
-    shm_size: "64mb"
+    shm_size: "512mb"
     ports:
       - "5000:5000"
       - "1935:1935" # RTMP

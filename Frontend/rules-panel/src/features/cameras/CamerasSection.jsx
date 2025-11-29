@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../../services/api";
+import { api, frigateProxy } from "../../services/api";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
@@ -11,6 +11,12 @@ export function CamerasSection() {
     const [loading, setLoading] = useState(false);
     const [editingCamera, setEditingCamera] = useState(null);
     const { addToast } = useToast();
+    const [reloadingFrigate, setReloadingFrigate] = useState(false);
+
+    // Buscar cámaras (escaneo unicast simplificado)
+    const [scanning, setScanning] = useState(false);
+    const [discovered, setDiscovered] = useState([]); // [{ip, onvif_ports, rtsp_ports}]
+    const [selectedFound, setSelectedFound] = useState(""); // value: `${ip}|${port}`
 
     const [form, setForm] = useState({
         name: "",
@@ -82,6 +88,14 @@ export function CamerasSection() {
                 addToast("Cámara agregada. Reinicia Frigate manualmente: docker restart frigate", "warning");
             }
 
+            // Además, recargar Frigate vía proxy (igual que el botón)
+            try {
+                await frigateProxy.post("/api/frigate/reload");
+                addToast("Frigate recargado/reiniciado", "success");
+            } catch (err) {
+                console.warn("No se pudo recargar Frigate vía proxy", err);
+            }
+
             await loadCameras();
             resetForm();
         } catch (err) {
@@ -108,6 +122,14 @@ export function CamerasSection() {
                 }
             } catch (restartErr) {
                 addToast("Reinicia Frigate manualmente: docker restart frigate", "warning");
+            }
+
+            // Además, recargar Frigate vía proxy (igual que el botón)
+            try {
+                await frigateProxy.post("/api/frigate/reload");
+                addToast("Frigate recargado/reiniciado", "success");
+            } catch (err) {
+                console.warn("No se pudo recargar Frigate vía proxy", err);
             }
 
             await loadCameras();
@@ -138,6 +160,70 @@ export function CamerasSection() {
         setForm({ ...form, ...template });
     };
 
+    const reloadFrigateCameras = async () => {
+        setReloadingFrigate(true);
+        try {
+            await frigateProxy.post("/api/frigate/reload");
+            addToast("Frigate recargado/reiniciado", "success");
+        } catch (err) {
+            console.error(err);
+            addToast(`No se pudo recargar Frigate: ${err.response?.data?.detail || err.message}`, "error");
+        } finally {
+            setReloadingFrigate(false);
+        }
+    };
+
+    const handleScan = async () => {
+        setScanning(true);
+        setDiscovered([]);
+        setSelectedFound("");
+        try {
+            const res = await frigateProxy.post("/api/discovery/scan", {}, { timeout: 60000 });
+            setDiscovered(res.data.devices || []);
+            addToast(`Encontrados ${res.data.devices?.length || 0} posibles dispositivos`, "success");
+        } catch (err) {
+            console.error(err);
+            addToast(`Error al escanear: ${err.response?.data?.detail || err.message}`, "error");
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    const guessAndPrefill = async (ip, port) => {
+        try {
+            const res = await frigateProxy.post("/api/rtsp/guess", {
+                ip,
+                ports: String(port),
+                username: (form.username || ""),
+                password: (form.password || ""),
+                timeout_ms: 800,
+                max_results: 6,
+            }, { timeout: 20000 });
+            const guesses = res.data.candidates || [];
+            if (guesses.length) {
+                const uri = guesses[0].uri;
+                // extract path from rtsp://...
+                try {
+                    const afterHost = uri.split('//')[1].split('/').slice(1).join('/');
+                    const path = '/' + afterHost;
+                    setForm((f) => ({ ...f, ip, port: String(port), stream_path: path }));
+                    addToast("Ruta de streaming sugerida completada", "success");
+                } catch {
+                    setForm((f) => ({ ...f, ip, port: String(port) }));
+                }
+            } else {
+                setForm((f) => ({ ...f, ip, port: String(port) }));
+                addToast("No se encontraron URLs RTSP; completa la ruta manualmente", "warning");
+            }
+        } catch (err) {
+            console.error(err);
+            setForm((f) => ({ ...f, ip, port: String(port) }));
+            addToast(`Error buscando URLs: ${err.response?.data?.detail || err.message}`, "error");
+        }
+    };
+
+    // (revert) No direct proxy reload from UI; backend endpoint will handle restart/reload
+
     return (
         <div
             className="grid-layout"
@@ -153,6 +239,8 @@ export function CamerasSection() {
                 flex: "1 1 auto",
             }}
         >
+            {/* (se removió sección de Buscar Cámaras para simplificar) */}
+
             {/* Formulario */}
             <div style={{ animation: "fadeIn 0.5s ease-out" }}>
                 <Card style={{
@@ -200,6 +288,34 @@ export function CamerasSection() {
                             Ejemplo: Si en tu archivo config.yml de Frigate tienes "cam_apto", usa ese mismo nombre aquí.
                         </span>
                     </div>
+
+                    {/* Buscar cámaras simplificado */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0" }}>
+                        <Button variant="secondary" onClick={handleScan} disabled={scanning}>
+                            {scanning ? "🛰️ Buscando..." : "🛰️ Buscar cámaras"}
+                        </Button>
+                        {scanning && <span style={{ fontSize: 12, color: "#64748b" }}>Escaneando la red local...</span>}
+                    </div>
+                    {discovered.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                            <label style={labelStyle}>CÁMARAS DETECTADAS</label>
+                            <select
+                                value={selectedFound}
+                                onChange={async (e) => {
+                                    const val = e.target.value; // ip|port
+                                    setSelectedFound(val);
+                                    const [ip, port] = val.split('|');
+                                    await guessAndPrefill(ip, port);
+                                }}
+                                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #cbd5e1' }}
+                            >
+                                <option value="">Selecciona una cámara</option>
+                                {discovered.flatMap((d) => (d.rtsp_ports || []).map((p) => (
+                                    <option key={`${d.ip}-${p}`} value={`${d.ip}|${p}`}>{d.ip} : {p}</option>
+                                )))}
+                            </select>
+                        </div>
+                    )}
 
                     <label style={labelStyle}>IP DE LA CÁMARA</label>
                     <Input
@@ -322,7 +438,12 @@ export function CamerasSection() {
                         }}>
                             Cámaras Configuradas
                         </h3>
-                        <Badge variant="neutral">{cameras.length} Total</Badge>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Badge variant="neutral">{cameras.length} Total</Badge>
+                            <Button variant="secondary" onClick={reloadFrigateCameras} disabled={reloadingFrigate}>
+                                {reloadingFrigate ? "Recargando..." : "🔁 Recargar cámaras"}
+                            </Button>
+                        </div>
                     </div>
                     {loading && (
                         <div style={{ textAlign: "center", padding: 40, color: "#64748b" }}>Cargando cámaras...</div>
@@ -478,4 +599,3 @@ const labelStyle = {
     letterSpacing: "0.05em",
     fontFamily: "var(--font-family-base)",
 };
-

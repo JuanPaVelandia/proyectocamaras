@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 import logging
@@ -10,6 +10,7 @@ import json
 from app.db.session import SessionLocal
 from app.api.endpoints.auth import get_current_user
 from app.models.all_models import UserDB, CameraDB, EventDB
+from app.api.endpoints import events as events_module
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -308,3 +309,37 @@ def restart_frigate_endpoint(
     except Exception as e:
         logger.error(f"Error en endpoint restart-frigate: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ingest-mapping")
+def get_ingest_mapping(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Public mapping endpoint for ingest clients (python-listener).
+    Auth: Authorization: Bearer <API_KEY> (same as /api/events/)
+    Returns list of cameras with name and rtsp_url.
+    """
+    expected = getattr(events_module, "EXPECTED_API_KEY", None)
+    if expected:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Missing Authorization header")
+        try:
+            scheme, token = authorization.split()
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid Authorization header")
+        if scheme.lower() != "bearer" or token != expected:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+    rows = db.query(CameraDB).filter(CameraDB.enabled == True).all()
+    return {
+        "cameras": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "rtsp_url": c.rtsp_url or "",
+            }
+            for c in rows
+        ]
+    }
