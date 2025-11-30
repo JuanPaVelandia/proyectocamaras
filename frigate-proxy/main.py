@@ -15,7 +15,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Tuple
 import threading
 from urllib.parse import urlparse
-import time
 try:
     from onvif import ONVIFCamera
     ONVIF_AVAILABLE = True
@@ -163,58 +162,25 @@ ONVIF_PATHS = [
 
 
 def _http_onvif_probe(ip: str, ports: List[int], timeout: float) -> List[int]:
-    """Optimized ONVIF probe with parallelization and early exit"""
     found = []
-    found_lock = threading.Lock()
-
-    def try_port_path(port: int, path: str) -> Tuple[bool, int]:
-        """Try a single port/path combination"""
-        url = f"http://{ip}:{port}{path}"
-        try:
-            probe_start = time.time()
-            r = requests.get(url, timeout=timeout)
-            probe_duration = time.time() - probe_start
-
-            if probe_duration > timeout * 0.8:
-                logger.debug(f"🐌 HTTP slow: {url} ({probe_duration:.3f}s)")
-
-            if r.status_code in (200, 401, 405):
-                return (True, port)
-        except Exception:
-            pass
-        return (False, port)
-
-    # Parallelize HTTP requests across ports and paths
-    max_parallel = min(len(ports) * len(ONVIF_PATHS), 12)  # Limit concurrent connections
-    with ThreadPoolExecutor(max_workers=max_parallel) as ex:
-        futures = []
-        for port in ports:
-            for path in ONVIF_PATHS:
-                futures.append(ex.submit(try_port_path, port, path))
-
-        # Process results as they complete (early exit optimization)
-        for fut in as_completed(futures):
-            success, port = fut.result()
-            if success:
-                with found_lock:
-                    if port not in found:
-                        found.append(port)
-                # Early exit: if we found all ports, no need to wait
-                if len(found) >= len(ports):
+    for port in ports:
+        for path in ONVIF_PATHS:
+            url = f"http://{ip}:{port}{path}"
+            try:
+                r = requests.get(url, timeout=timeout)
+                if r.status_code in (200, 401, 405):
+                    found.append(port)
                     break
-
+            except Exception:
+                continue
+    # dedupe
     return sorted(list(set(found)))
 
 
 def _rtsp_options_probe(ip: str, ports: List[int], timeout: float) -> List[int]:
-    """Optimized RTSP probe with parallelization"""
     found = []
-    found_lock = threading.Lock()
-
-    def try_rtsp_port(port: int) -> Tuple[bool, int]:
-        """Try a single RTSP port"""
+    for port in ports:
         try:
-            probe_start = time.time()
             with socket.create_connection((ip, int(port)), timeout=timeout) as s:
                 s.settimeout(timeout)
                 # minimal OPTIONS to root path
@@ -224,30 +190,13 @@ def _rtsp_options_probe(ip: str, ports: List[int], timeout: float) -> List[int]:
                     data = s.recv(4096)
                 except socket.timeout:
                     data = b""
-
-                probe_duration = time.time() - probe_start
-                if probe_duration > timeout * 0.8:
-                    logger.debug(f"🐌 RTSP slow: {ip}:{port} ({probe_duration:.3f}s)")
-
                 if b"RTSP/1.0" in data or b"Public:" in data or data.startswith(b"RTSP/"):
-                    return (True, port)
+                    found.append(port)
                 else:
                     # If connection succeeded but no response (some servers), still consider port as candidate
-                    return (True, port)
-        except Exception:
-            pass
-        return (False, port)
-
-    # Parallelize RTSP port checks
-    with ThreadPoolExecutor(max_workers=min(len(ports), 8)) as ex:
-        futures = [ex.submit(try_rtsp_port, port) for port in ports]
-
-        for fut in as_completed(futures):
-            success, port = fut.result()
-            if success:
-                with found_lock:
                     found.append(port)
-
+        except Exception:
+            continue
     return sorted(list(set(found)))
 
 
@@ -274,16 +223,14 @@ async def discovery_scan(payload: dict):
       cidr?: string (default common subnets),
       onvif_ports?: string|number[],
       rtsp_ports?: string|number[],
-      timeout_ms?: number (default 300, reduced from 500),
+      timeout_ms?: number (default 500),
       max_hosts?: number (default 512)
     }
     """
-    scan_start_time = time.time()
-
     cidr = (payload.get("cidr") or "").strip()
     onvif_ports = _parse_ports(payload.get("onvif_ports"), [80, 8000, 8080, 8899])
     rtsp_ports = _parse_ports(payload.get("rtsp_ports"), [554, 8554, 10554, 7070])
-    timeout_ms = int(payload.get("timeout_ms") or 300)  # ⚡ Reduced from 500ms to 300ms
+    timeout_ms = int(payload.get("timeout_ms") or 500)
     max_hosts = int(payload.get("max_hosts") or 128)
 
     nets: List[ipaddress.IPv4Network] = []
@@ -313,57 +260,28 @@ async def discovery_scan(payload: dict):
 
     timeout = max(0.1, timeout_ms / 1000.0)
 
-    hosts_gen_duration = time.time() - scan_start_time
-    logger.info(f"⏱️ [SCAN] Host generation: {hosts_gen_duration:.2f}s | Hosts: {len(hosts)}")
-
     results: Dict[str, Dict[str, Any]] = {}
     lock = threading.Lock()
-
     def worker(ip: str):
-        """Optimized worker with parallel ONVIF and RTSP probing"""
-        worker_start = time.time()
         try:
-            # ⚡ OPTIMIZATION #1: Parallelize ONVIF and RTSP probes
-            with ThreadPoolExecutor(max_workers=2) as probe_ex:
-                onvif_future = probe_ex.submit(_http_onvif_probe, ip, onvif_ports, timeout)
-                rtsp_future = probe_ex.submit(_rtsp_options_probe, ip, rtsp_ports, timeout)
-
-                onv = onvif_future.result()
-                rtsp = rtsp_future.result()
-
+            onv = _http_onvif_probe(ip, onvif_ports, timeout)
+            rtsp = _rtsp_options_probe(ip, rtsp_ports, timeout)
             if onv or rtsp:
-                worker_duration = time.time() - worker_start
-                logger.info(f"✅ {ip}: {worker_duration:.2f}s | ONVIF={onv} RTSP={rtsp}")
                 with lock:
                     results[ip] = {
                         "ip": ip,
                         "onvif_ports": onv,
                         "rtsp_ports": rtsp,
                     }
-            else:
-                worker_duration = time.time() - worker_start
-                if worker_duration > 1.0:
-                    logger.debug(f"⏭️ {ip}: {worker_duration:.2f}s (no devices)")
         except Exception as e:
-            worker_duration = time.time() - worker_start
-            logging.debug(f"❌ scan worker error {ip} ({worker_duration:.2f}s): {e}")
+            logging.debug(f"scan worker error {ip}: {e}")
 
-    import os
-    # ⚡ OPTIMIZATION #4: More aggressive worker count for I/O-bound operations
-    workers = min(os.cpu_count() * 8 if os.cpu_count() else 32, len(hosts), 64)
-
+    workers = max(4, min(32, len(hosts)))
     logging.info(f"📡 discovery scan: hosts={len(hosts)} timeout={timeout_ms}ms onvif_ports={onvif_ports} rtsp_ports={rtsp_ports} workers={workers}")
-
-    scan_exec_start = time.time()
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futs = [ex.submit(worker, ip) for ip in hosts]
         for _ in as_completed(futs):
             pass
-
-    scan_exec_duration = time.time() - scan_exec_start
-    total_duration = time.time() - scan_start_time
-
-    logger.info(f"⏱️ [SCAN] Execution: {scan_exec_duration:.2f}s | Total: {total_duration:.2f}s | Found: {len(results)} devices")
 
     return {"devices": list(results.values())}
 

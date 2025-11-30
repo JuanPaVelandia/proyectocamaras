@@ -1,0 +1,32 @@
+/* Responsive styles for mobile */
+@media (max-width: 1024px) {
+    /* Make grid layouts single column on tablets and mobile */
+    .grid-layout {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Ensure cards take full width on mobile */
+    .card-container {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Tabs en móvil: scroll horizontal */
+    .sticky-tabs {
+        grid-template-columns: repeat(4, minmax(120px, 1fr)) !important;
+        overflow-x: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Additional mobile-specific styles */
+    .grid-layout {
+        gap: 16px !important;
+    }
+    
+    /* Tabs más pequeños en móviles muy pequeños */
+    .sticky-tabs {
+        grid-template-columns: repeat(4, minmax(100px, 1fr)) !important;
+    }
+}
+

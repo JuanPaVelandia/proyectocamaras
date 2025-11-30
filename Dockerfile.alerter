@@ -1,0 +1,14 @@
+# Usa una imagen base pequeña con Python
+FROM python:3.11-slim
+
+# Crea el directorio de trabajo
+WORKDIR /app
+
+# Copia tu script de Python (cerebro.py) a la imagen
+COPY cerebro.py /app/
+
+# Instala las librerías necesarias
+RUN pip install paho-mqtt requests
+
+# Comando para iniciar el script al arrancar el contenedor
+CMD ["python", "cerebro.py"]

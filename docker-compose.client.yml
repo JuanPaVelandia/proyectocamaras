@@ -1,0 +1,105 @@
+version: "3.9"
+
+# ============================================================
+# CONFIGURACIÓN CLIENTE - Solo Frigate + Listener
+# ============================================================
+# Esta configuración es para usuarios que solo quieren
+# instalar Frigate localmente y conectarse a un backend
+# centralizado en la nube (Railway).
+#
+# El usuario NO necesita:
+# - Base de datos PostgreSQL
+# - Backend propio
+# - Panel web (acceden al tuyo)
+#
+# Solo necesitan:
+# - Frigate (para procesar sus cámaras localmente)
+# - Listener (para enviar eventos a tu backend)
+# ============================================================
+
+services:
+  # --- Broker MQTT ---
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - frigate_net
+
+  # --- Frigate NVR ---
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:0.16.0
+    container_name: frigate
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    shm_size: "512mb"
+    ports:
+      - "5001:5000"
+      - "1935:1935" # RTMP
+      - "8554:8554" # RTSP
+      - "8555:8555" # WebRTC
+    volumes:
+      - ./config/config.yml:/config/config.yml:rw
+      - ./media:/media/frigate
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - frigate_net
+
+  # --- Listener (Python MQTT -> HTTP) ---
+  # Envía eventos de Frigate al backend centralizado en Railway
+  listener:
+    build: ./python-listener
+    container_name: frigate_listener
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    environment:
+      - MQTT_HOST=mosquitto
+      # ⚠️ IMPORTANTE: Cambia esta URL por tu backend en Railway
+      - CLOUD_API_URL=https://proyectocamaras-production.up.railway.app/api/events/
+      - CLOUD_API_KEY=super-token-secreto
+      # Mapeo de cámaras: nombre_local:nombre_panel_web
+      # Ejemplo: si en Frigate tienes "camara_entrada" pero en el panel web la registraste como "cam_recibo"
+      # - CAMERA_MAPPING=camara_entrada:cam_recibo
+      # Para múltiples cámaras: camara1:cam_recibo,camara2:cam_cocina
+      - CAMERA_MAPPING=cam_apto:cam_recibo
+    networks:
+      - frigate_net
+
+  # --- Frigate Local Proxy (opcional) ---
+  # Permite que el panel web agregue cámaras a Frigate sin editar config.yml
+  frigate-proxy:
+    build: ./frigate-proxy
+    container_name: frigate_proxy
+    restart: unless-stopped
+    depends_on:
+      - frigate
+    environment:
+      - FRIGATE_HOST=http://frigate:5000
+      - FRIGATE_CONFIG_PATH=/config/config.yml
+    volumes:
+      - ./config:/config:rw
+    ports:
+      - "8001:8001"
+    networks:
+      - frigate_net
+
+networks:
+  frigate_net:
+    driver: bridge
+
+# ============================================================
+# NOTAS PARA EL USUARIO:
+# ============================================================
+# 1. Edita la URL del backend arriba con tu URL de Railway
+# 2. Configura tus cámaras en config/config.yml
+# 3. Ejecuta: docker-compose -f docker-compose.client.yml up -d
+# 4. Accede a Frigate: http://localhost:5000
+# 5. Crea tu cuenta en el panel web del backend centralizado
+# 6. Configura tus reglas y WhatsApp desde el panel web
+# ============================================================

@@ -1,0 +1,64 @@
+mqtt:
+  host: mosquitto
+  port: 1883
+  user: ''
+  password: ''
+  topic_prefix: frigate
+detectors:
+  cpu1:
+    type: cpu
+objects:
+  track:
+  - person
+  - car
+  - dog
+  - cat
+  - bicycle
+cameras:
+  camara_principal:
+    ffmpeg:
+      inputs:
+      - path: rtsp://admin:admin@192.168.1.87:8554/live
+        roles:
+        - detect
+        - record
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 1
+        mode: motion
+    snapshots:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      retain:
+        default: 1
+  camara_manare:
+    ffmpeg:
+      inputs:
+      - path: rtsp://admin:BRJQEG@192.168.1.34:554/Streaming/Channels/101
+        roles:
+        - detect
+        - record
+    detect:
+      width: 1920
+      height: 1080
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 1
+        mode: motion
+    snapshots:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      retain:
+        default: 1
+detect:
+  enabled: true
+version: 0.16-0
