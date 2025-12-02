@@ -72,7 +72,7 @@ build/
 # Credentials and secrets
 *_secret*
 *_token*
-*password*
+
 *credential*
 identificador de acceso.txt
 whatsapp_phone_id.txt
