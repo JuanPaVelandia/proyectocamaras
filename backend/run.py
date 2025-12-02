@@ -11,21 +11,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Ejecutar migraciones (solo se ejecutan una vez)
+# Ejecutar migraciones con Alembic
 try:
-    logger.info("🔄 Ejecutando migraciones de base de datos...")
-
-    # Migración 1: Tabla de cámaras
-    from migrate_add_cameras_table import migrate as migrate_cameras
-    migrate_cameras()
-
-    # Migración 2: Campo whatsapp_notifications_enabled
-    from migrate_add_whatsapp_enabled import migrate as migrate_whatsapp
-    migrate_whatsapp()
-
+    logger.info("🔄 Ejecutando migraciones de base de datos (Alembic)...")
+    import subprocess
+    subprocess.run(["alembic", "upgrade", "head"], check=True)
     logger.info("✅ Migraciones completadas")
 except Exception as e:
-    logger.warning(f"⚠️ Migración falló o ya fue ejecutada: {e}")
+    logger.error(f"❌ Error ejecutando migraciones: {e}")
+    # No salimos, intentamos iniciar la app de todos modos, aunque podría fallar si la DB no está lista
+
 
 try:
     import uvicorn
