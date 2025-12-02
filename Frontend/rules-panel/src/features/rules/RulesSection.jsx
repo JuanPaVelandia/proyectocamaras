@@ -316,7 +316,8 @@ export function RulesSection() {
                         }}
                     >
                         <option value="">Seleccionar cámara (opcional)</option>
-                        {cameras.map((cam) => (
+                        {/* Defensive check for cameras array */}
+                        {(cameras || []).map((cam) => (
                             <option key={cam} value={cam}>
                                 {cam}
                             </option>
@@ -344,17 +345,27 @@ export function RulesSection() {
                             <div style={{ textAlign: "center", padding: 20, color: "#64748b" }}>
                                 Cargando objetos...
                             </div>
-                        ) : objects.length === 0 ? (
+                        ) : (objects || []).length === 0 ? (
                             <div style={{ textAlign: "center", padding: 20, color: "#64748b" }}>
                                 No hay objetos disponibles
                             </div>
                         ) : (() => {
                             // Filtrar objetos según la búsqueda
-                            const filteredObjects = objects.filter((obj) => {
-                                const searchLower = objectSearch.toLowerCase();
+                            const filteredObjects = (objects || []).filter((obj) => {
+                                const searchLower = (objectSearch || "").toLowerCase();
+
+                                // Handle if obj is just a string
+                                if (typeof obj === 'string') {
+                                    return obj.toLowerCase().includes(searchLower);
+                                }
+
+                                // Handle if obj is an object
+                                const label = String(obj?.label || "");
+                                const value = String(obj?.value || "");
+
                                 return (
-                                    obj.label.toLowerCase().includes(searchLower) ||
-                                    obj.value.toLowerCase().includes(searchLower)
+                                    label.toLowerCase().includes(searchLower) ||
+                                    value.toLowerCase().includes(searchLower)
                                 );
                             });
 
@@ -426,13 +437,13 @@ export function RulesSection() {
                     )}
                     {objectSearch && (
                         <p style={{ fontSize: 11, color: "#94a3b8", marginTop: -8, marginBottom: 12 }}>
-                            Mostrando {objects.filter((obj) => {
+                            Mostrando {(objects || []).filter((obj) => {
                                 const searchLower = objectSearch.toLowerCase();
                                 return (
-                                    obj.label.toLowerCase().includes(searchLower) ||
-                                    obj.value.toLowerCase().includes(searchLower)
+                                    (obj.label || "").toLowerCase().includes(searchLower) ||
+                                    (obj.value || "").toLowerCase().includes(searchLower)
                                 );
-                            }).length} de {objects.length} objetos
+                            }).length} de {(objects || []).length} objetos
                         </p>
                     )}
                     <div style={{ display: "flex", gap: 10 }}>
@@ -611,7 +622,7 @@ export function RulesSection() {
                         maxWidth: "100%",
                         boxSizing: "border-box",
                     }}>
-                        {rules.map((rule) => (
+                        {(rules || []).map((rule) => (
                             <div
                                 key={rule.id}
                                 style={{
@@ -675,8 +686,8 @@ export function RulesSection() {
                                         )}
                                         {rule.label && (
                                             <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                👤 {rule.label.split(",").map(l => {
-                                                    const obj = objects.find(o => o.value === l.trim());
+                                                👤 {(rule.label || "").split(",").map(l => {
+                                                    const obj = (objects || []).find(o => o.value === l.trim());
                                                     return obj ? obj.label : l.trim();
                                                 }).join(", ")}
                                             </span>

@@ -10,7 +10,7 @@ export function LandingPageV0({ onGetStarted, onLogin, onRegister }) {
     return (
         <main className="min-h-screen bg-background text-foreground">
             <Header onLogin={onLogin} onRegister={onRegister} />
-            <HeroSection onGetStarted={onGetStarted} />
+            <HeroSection onGetStarted={onRegister} />
             <DemoSection />
             <ValueProposition />
             <HowItWorks />

@@ -16,7 +16,7 @@ export function PhoneMockup({ imageUrl, altText, alertMessage, className }) {
                             </svg>
                         </div>
                         <div className="flex-1">
-                            <div className="text-white font-semibold text-sm">Vidria Alertas</div>
+                            <div className="text-white font-semibold text-sm">Vidria Alerts</div>
                             <div className="text-white/80 text-xs">En línea</div>
                         </div>
                         <button className="text-white">

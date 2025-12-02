@@ -2,7 +2,7 @@ import { Button } from "./ui/button"
 import { WhatsAppMockup } from "./whatsapp-mockup"
 import { Sparkles } from "lucide-react"
 
-export function HeroSection() {
+export function HeroSection({ onGetStarted }) {
     return (
         <section className="relative overflow-hidden px-4 py-16 md:py-24 lg:py-32">
             <div className="container mx-auto max-w-7xl">
@@ -22,6 +22,7 @@ export function HeroSection() {
                         <div className="flex flex-col sm:flex-row gap-4">
                             <Button
                                 size="lg"
+                                onClick={onGetStarted}
                                 className="text-lg px-8 py-6 rounded-2xl shadow-lg hover:shadow-xl transition-all bg-primary hover:bg-primary/90 text-primary-foreground"
                             >
                                 <Sparkles className="mr-2 h-5 w-5" />

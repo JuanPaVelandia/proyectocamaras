@@ -4,8 +4,13 @@ import { Button } from "../landing/components/v0/ui/button";
 import { Input } from "../landing/components/v0/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "../landing/components/v0/ui/card";
 import { useToast } from "../../context/ToastContext";
+import { ShieldCheck } from "lucide-react";
 
-export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegister }) {
+export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegister, onForgotPassword }) {
+    // ... existing code ...
+
+
+
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -71,17 +76,26 @@ export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegiste
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-700">
+        <div className="flex min-h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-700 relative">
+            {onBackToLanding && (
+                <Button
+                    onClick={onBackToLanding}
+                    variant="ghost"
+                    className=" absolute top-4 left-4 md:top-8 md:left-8 text-muted-foreground hover:bg-white hover:shadow-md hover:text-emerald-600 text-lg px-6 py-3 h-auto"
+                >
+                    ← Volver
+                </Button>
+            )}
             <Card className="w-full max-w-md shadow-2xl border-border/50 bg-card/95 backdrop-blur-sm">
                 <CardHeader className="space-y-1 text-center">
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-3xl text-white shadow-lg shadow-emerald-500/30">
-                        📷
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30">
+                        <ShieldCheck className="h-8 w-8" />
                     </div>
                     <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
-                        Vidria
+                        Bienvenido de nuevo
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
-                        Accede a tu centro de control inteligente
+                        Ingresa tus credenciales para continuar
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -112,6 +126,15 @@ export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegiste
                             }}
                             className="bg-secondary/50"
                         />
+                        <div className="flex justify-end">
+                            <Button
+                                variant="link"
+                                className="px-0 text-xs font-medium text-muted-foreground hover:text-emerald-600 h-auto py-1"
+                                onClick={onForgotPassword}
+                            >
+                                ¿Olvidaste tu contraseña?
+                            </Button>
+                        </div>
                     </div>
 
                     {oauthProviders.length > 0 && (
@@ -160,10 +183,10 @@ export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegiste
                         <Button
                             onClick={onBackToLanding}
                             variant="ghost"
-                            className="w-full text-muted-foreground hover:text-foreground hover:bg-white-500"
-                            size="sm"
+                            className="w-full bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-all font-medium"
+                            size="lg"
                         >
-                            ← Volver al inicio
+                            Volver al inicio
                         </Button>
                     )}
 

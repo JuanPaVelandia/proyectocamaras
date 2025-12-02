@@ -1,7 +1,7 @@
 import React from "react";
 import { UserMenu } from "../components/UserMenu";
 
-export function DashboardLayout({ children, onLogout, onNavigateToProfile }) {
+export function DashboardLayout({ children, onLogout, onNavigateToProfile, onNavigateToLanding }) {
     return (
         <div style={{
             width: "100%",
@@ -19,7 +19,11 @@ export function DashboardLayout({ children, onLogout, onNavigateToProfile }) {
                     padding: "clamp(16px, 2.5vw, 24px) clamp(16px, 3vw, 32px)",
                 }}
             >
-                <div style={{ flex: "1 1 auto", minWidth: "200px" }}>
+                <div
+                    style={{ flex: "1 1 auto", minWidth: "200px", cursor: "pointer" }}
+                    onClick={onNavigateToLanding}
+                    title="Volver al inicio"
+                >
                     <h1 style={{
                         margin: 0,
                         fontSize: "clamp(20px, 3.5vw, 28px)",
@@ -41,7 +45,13 @@ export function DashboardLayout({ children, onLogout, onNavigateToProfile }) {
                     </p>
                 </div>
 
-                <UserMenu onLogout={onLogout} onNavigateToProfile={onNavigateToProfile} />
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <UserMenu
+                        onLogout={onLogout}
+                        onNavigateToProfile={onNavigateToProfile}
+                        onNavigateToLanding={onNavigateToLanding}
+                    />
+                </div>
             </header>
 
             <main style={{

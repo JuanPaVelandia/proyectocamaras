@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useToast } from "../context/ToastContext";
 import { api } from "../services/api";
 
-export function UserMenu({ onLogout, onNavigateToProfile }) {
+export function UserMenu({ onLogout, onNavigateToProfile, onNavigateToLanding }) {
     const [isOpen, setIsOpen] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);

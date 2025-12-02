@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Request, Header, HTTPException, Depends
+from fastapi import APIRouter, Request, Header, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
 import json
 import logging
+import os
 from datetime import datetime
 
 from app.db.session import SessionLocal
@@ -12,9 +13,13 @@ from app.api.endpoints.auth import get_current_user
 
 router = APIRouter()
 
-EXPECTED_API_KEY = "super-token-secreto"
+# SECURITY FIX: Use env var for API Key
+EXPECTED_API_KEY = os.getenv("API_SECRET_KEY")
 EVENTS_IN_MEMORY: List[Dict[str, Any]] = []
 
+
+#Este bloque prepara al router, le define una contrase, cuelga una pizarra borrable
+#y contrata un bibliotecario efeiciente que se asegura que nadie se robe los libros de la bd
 def get_db():
     db = SessionLocal()
     try:
@@ -26,6 +31,7 @@ def get_db():
 @router.post("/")
 async def receive_event(
     request: Request,
+    background_tasks: BackgroundTasks,
     authorization: Optional[str] = Header(None)
 ):
     if EXPECTED_API_KEY:
@@ -59,7 +65,7 @@ async def receive_event(
     # finally:
     #     db_check.close()
 
-    logging.info(f"📨 Evento recibido en backend: {body}")
+    logging.info(f"📨 Evento recibido en backend: {body.get('type')} - {body.get('label')}")
 
     now = datetime.utcnow()
 
@@ -67,31 +73,43 @@ async def receive_event(
         "received_at": now.isoformat() + "Z",
         "event": body,
     }
+    
     EVENTS_IN_MEMORY.append(wrapped_event)
+    
+    # MEMORY FIX: Limit memory usage
+    if len(EVENTS_IN_MEMORY) >= 500:
+        EVENTS_IN_MEMORY.pop(0) 
 
     # Extraer snapshot_base64 si viene en el body
     snapshot_b64 = body.pop('snapshot_base64', None)
 
-    db = SessionLocal()
-    try:
-        db_event = EventDB(
-            received_at=now,
-            payload=json.dumps(body),
-            snapshot_base64=snapshot_b64
-        )
-        db.add(db_event)
-        db.commit()
-        db.refresh(db_event)
+    # DB FIX: Only save 'end' events to DB (PostgreSQL)
+    # 'new' and 'update' are kept in RAM only for live view
+    if body.get('type') == 'end':
+        db = SessionLocal()
+        try:
+            db_event = EventDB(
+                received_at=now,
+                payload=json.dumps(body),
+                snapshot_base64=snapshot_b64
+            )
+            db.add(db_event)
+            db.commit()
+            db.refresh(db_event)
 
-        evaluate_rules(body, db_event.id)
+            # CONCURRENCY: Offload rule evaluation to background task
+            background_tasks.add_task(evaluate_rules, body, db_event.id)
 
-    except Exception as e:
-        logging.error(f"❌ Error guardando evento o evaluando reglas: {e}")
-        raise HTTPException(status_code=500, detail=f"Error saving event: {str(e)}")
-    finally:
-        db.close()
+        except Exception as e:
+            logging.error(f"❌ Error guardando evento o evaluando reglas: {e}")
+            raise HTTPException(status_code=500, detail=f"Error saving event: {str(e)}")
+        finally:
+            db.close()
+    else:
+        # For 'new'/'update', we don't save to DB and don't trigger rules (no DB ID)
+        pass
 
-    return {"status": "ok", "stored": True}
+    return {"status": "ok", "stored": body.get('type') == 'end'}
 
 
 @router.get("/")

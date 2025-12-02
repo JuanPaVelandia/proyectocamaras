@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import { api } from "../../services/api";
 import { Button } from "../landing/components/v0/ui/button";
 import { Input } from "../landing/components/v0/ui/input";
@@ -7,7 +8,7 @@ import { PhoneInput } from "../../components/ui/PhoneInput";
 import { useToast } from "../../context/ToastContext";
 import { isValidPhoneNumber } from "react-phone-number-input";
 
-export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
+export function RegisterForm({ onRegisterSuccess, onBackToLogin, onBackToLanding }) {
     const [formData, setFormData] = useState({
         username: "",
         email: "",
@@ -126,11 +127,20 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }) {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-700">
+        <div className="flex min-h-screen items-center justify-center bg-background p-4 animate-in fade-in duration-700 relative">
+            {onBackToLanding && (
+                <Button
+                    onClick={onBackToLanding}
+                    variant="ghost"
+                    className="absolute top-4 left-4 md:top-8 md:left-8 text-muted-foreground hover:bg-white hover:shadow-md hover:text-emerald-600 text-lg px-6 py-3 h-auto"
+                >
+                    ← Volver
+                </Button>
+            )}
             <Card className="w-full max-w-lg shadow-2xl border-border/50 bg-card/95 backdrop-blur-sm">
                 <CardHeader className="space-y-1 text-center">
                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-3xl text-white shadow-lg shadow-emerald-500/30">
-                        ✨
+                        <ShieldCheck className="h-8 w-8" />
                     </div>
                     <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
                         Crear Cuenta

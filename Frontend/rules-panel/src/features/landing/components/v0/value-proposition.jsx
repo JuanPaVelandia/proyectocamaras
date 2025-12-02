@@ -31,7 +31,7 @@ export function ValueProposition() {
                 <div className="text-center mb-12 md:mb-16">
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6 text-balance leading-tight">Tu seguridad, actualizada.</h2>
                     <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto text-pretty leading-relaxed">
-                        Transforma cualquier cámara en una cámara inteligente sin complicaciones
+                        Integra inteligencia artificial en tus cámaras de seguridad
                     </p>
                 </div>
 

@@ -37,6 +37,7 @@ SITE_ID = os.getenv("SITE_ID", "sede_demo")
 FRIGATE_URL = os.getenv("FRIGATE_URL", "http://frigate:5000")
 
 # Mapeo de nombres de cámaras: local_name:remote_name,local_name2:remote_name2
+# Lo que está haciendo es un arreglo para que el nombre de la cámara en frigate sea el mismo que el nombre de la cámara en la nube
 ENV_CAMERA_MAPPING_STR = os.getenv("CAMERA_MAPPING", "")
 CAMERA_MAPPING = {}
 if ENV_CAMERA_MAPPING_STR:
@@ -52,6 +53,7 @@ if not CLOUD_API_URL:
 
 
 # ---------- Helper: Compute API base ----------
+# Descubrir cuál es la dirección principal de tu servidor
 def compute_api_base() -> str:
     if CLOUD_API_BASE:
         return CLOUD_API_BASE.rstrip("/")
@@ -243,6 +245,7 @@ def normalize_frigate_event(data: dict) -> dict:
 
 
 # ---------- Dynamic mapping sync ----------
+#Normaliza las direcciones de las cámaras para dejarlas en un formato único y borrarle sus credenciales
 def normalize_rtsp(rtsp: str) -> str:
     try:
         if not rtsp:
@@ -258,7 +261,7 @@ def normalize_rtsp(rtsp: str) -> str:
     except Exception:
         return rtsp or ""
 
-
+#Esta función le pregunta al servidor las cámaras que tiene registradas
 def fetch_backend_cameras() -> list[dict]:
     try:
         base = compute_api_base()
@@ -277,6 +280,7 @@ def fetch_backend_cameras() -> list[dict]:
         return []
 
 
+#
 def fetch_frigate_inputs() -> dict:
     try:
         # Get config from Frigate
@@ -370,6 +374,10 @@ def on_message(client, userdata, msg):
         return
 
     normalized_event = normalize_frigate_event(data)
+
+    # DATA SAVING FIX: Filter out 'update' events locally
+    if normalized_event.get('frigate_type') == 'update':
+        return
 
     logging.info(
         f"📥 Evento normalizado: camera={normalized_event.get('camera')}, "

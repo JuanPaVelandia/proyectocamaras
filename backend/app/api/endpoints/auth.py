@@ -216,3 +216,74 @@ def update_user_profile(
             "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled
         }
     }
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+from app.utils.email_utils import send_reset_password_email
+
+@router.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Solicita un restablecimiento de contraseña.
+    Envia un correo electrónico con el enlace de recuperación.
+    """
+    user = db.query(UserDB).filter(UserDB.email == req.email).first()
+    
+    # Por seguridad, siempre respondemos éxito aunque el email no exista
+    if not user:
+        # Simulamos un pequeño delay para evitar timing attacks
+        import time
+        time.sleep(0.5)
+        return {"message": "Si el correo existe, se han enviado las instrucciones"}
+    
+    # Generar token de recuperación (temporalmente usamos el mismo helper)
+    # En producción esto debería ser un token específico con expiración corta
+    reset_token = create_access_token(data={"user_id": user.id, "type": "reset"})
+    
+    # Enviar correo real
+    send_reset_password_email(user.email, reset_token)
+    
+    return {
+        "message": "Si el correo existe, se han enviado las instrucciones"
+    }
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('La contraseña debe tener al menos 8 caracteres')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('La contraseña debe contener al menos una mayúscula')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('La contraseña debe contener al menos un número')
+        return v
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Restablece la contraseña usando el token de recuperación"""
+    
+    # Verificar token
+    payload = verify_token(req.token)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Token inválido o expirado")
+        
+    if payload.get("type") != "reset":
+        raise HTTPException(status_code=400, detail="Token inválido para restablecimiento")
+        
+    user_id = payload.get("user_id")
+    user = db.query(UserDB).get(user_id)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+    # Actualizar contraseña
+    user.password_hash = hash_password(req.new_password)
+    db.commit()
+    
+    logging.info(f"✅ Contraseña restablecida para: {user.username}")
+    
+    return {"message": "Contraseña restablecida exitosamente"}

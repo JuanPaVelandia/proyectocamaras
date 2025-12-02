@@ -314,7 +314,7 @@ export function CamerasSection() {
                         <Button variant="secondary" onClick={handleScan} disabled={scanning}>
                             {scanning ? "🛰️ Buscando..." : "🛰️ Buscar cámaras"}
                         </Button>
-                        {scanning && <span style={{ fontSize: 12, color: "#64748b" }}>Escaneando la red local, esto pued tardar unos minutos...</span>}
+                        {scanning && <span style={{ fontSize: 12, color: "#64748b" }}>Escaneando la red local, esto puede tardar unos minutos...</span>}
                     </div>
                     {discovered.length > 0 && (
                         <div style={{ marginBottom: 12 }}>

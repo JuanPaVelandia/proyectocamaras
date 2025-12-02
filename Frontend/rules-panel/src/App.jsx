@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { LoginForm } from "./features/auth/LoginForm";
 import { RegisterForm } from "./features/auth/RegisterForm";
+import { ForgotPasswordForm } from "./features/auth/ForgotPasswordForm";
+import { ResetPasswordForm } from "./features/auth/ResetPasswordForm";
 import { DashboardLayout } from "./layouts/DashboardLayout";
 import { RulesSection } from "./features/rules/RulesSection";
 import { HitsSection } from "./features/dashboard/HitsSection";
@@ -19,14 +21,15 @@ import "./styles/layout.css";
 function App() {
   const [token, setToken] = useState(localStorage.getItem("adminToken") || "");
   const [view, setView] = useState(() => {
+    // Check for reset password URL first
+    if (window.location.pathname === "/reset-password") {
+      return "reset-password";
+    }
     const savedView = localStorage.getItem("view");
     if (savedView === "landing") return "landing";
     return token ? "dashboard" : "landing";
   });
   const [tab, setTab] = useState("cameras");
-  const [showOnboarding, setShowOnboarding] = useState(
-    !localStorage.getItem("onboarding_completed") && token ? true : false
-  );
 
   const handleLoginSuccess = (newToken) => {
     setToken(newToken);
@@ -41,7 +44,7 @@ function App() {
     const username = urlParams.get("username");
     const email = urlParams.get("email");
 
-    if (token && username) {
+    if (token && username && !window.location.pathname.includes("reset-password")) {
       // Guardar datos del usuario en localStorage
       const userData = {
         username: username,
@@ -112,6 +115,10 @@ function App() {
               localStorage.setItem("view", "register");
               setView("register");
             }}
+            onForgotPassword={() => {
+              localStorage.setItem("view", "forgot-password");
+              setView("forgot-password");
+            }}
           />
         </div>
       ) : view === "register" ? (
@@ -127,10 +134,38 @@ function App() {
               localStorage.setItem("view", "login");
               setView("login");
             }}
+            onBackToLanding={() => {
+              localStorage.setItem("view", "landing");
+              setView("landing");
+            }}
           />
         </div>
-      ) : showOnboarding ? (
-        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+      ) : view === "forgot-password" ? (
+        <div className="min-h-screen bg-background">
+          <ForgotPasswordForm
+            onBackToLogin={() => {
+              localStorage.setItem("view", "login");
+              setView("login");
+            }}
+          />
+        </div>
+      ) : view === "reset-password" ? (
+        <div className="min-h-screen bg-background">
+          <ResetPasswordForm
+            token={new URLSearchParams(window.location.search).get("token")}
+            onResetSuccess={() => {
+              // Limpiar URL y volver al login
+              window.history.replaceState({}, document.title, "/");
+              localStorage.setItem("view", "login");
+              setView("login");
+            }}
+            onBackToLogin={() => {
+              window.history.replaceState({}, document.title, "/");
+              localStorage.setItem("view", "login");
+              setView("login");
+            }}
+          />
+        </div>
       ) : (
         <div
           style={{
@@ -138,7 +173,14 @@ function App() {
             background: "#f8fafc",
           }}
         >
-          <DashboardLayout onLogout={handleLogout} onNavigateToProfile={() => setTab("profile")}>
+          <DashboardLayout
+            onLogout={handleLogout}
+            onNavigateToProfile={() => setTab("profile")}
+            onNavigateToLanding={() => {
+              localStorage.setItem("view", "landing");
+              setView("landing");
+            }}
+          >
             {/* Mostrar tabs de navegación solo si no estamos en perfil */}
             {tab !== "profile" && (
               <div

@@ -20,6 +20,10 @@ class UserDB(Base):
     avatar_url = Column(String(500), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Subscription fields
+    is_active = Column(Boolean, default=True, nullable=False)
+    expiration_date = Column(DateTime, nullable=True)
 
     rules = relationship("RuleDB", back_populates="user")
 
@@ -39,7 +43,7 @@ class CameraDB(Base):
     __tablename__ = "cameras"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), unique=True, nullable=False, index=True)  # Nombre en Frigate
+    name = Column(String(255), nullable=False, index=True)  # Nombre en Frigate
     rtsp_url = Column(String(500), nullable=True)  # URL RTSP (opcional, informativo)
     description = Column(Text, nullable=True)  # Descripción opcional
     enabled = Column(Boolean, default=True)  # Si está activa
