@@ -13,6 +13,15 @@ def send_email(to_email: str, subject: str, html_content: str):
         logging.info(f"📧 [SIMULACIÓN] Para: {to_email} | Asunto: {subject}")
         return
 
+    # Validar configuración antes de intentar conexión
+    if not settings.SMTP_HOST.strip():
+        logging.error("❌ SMTP_HOST está vacío o no configurado")
+        return
+    
+    if not settings.SMTP_PASSWORD:
+        logging.error("❌ SMTP_PASSWORD no está configurado")
+        return
+
     try:
         msg = MIMEMultipart()
         msg["From"] = f"{settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>"
@@ -21,19 +30,49 @@ def send_email(to_email: str, subject: str, html_content: str):
 
         msg.attach(MIMEText(html_content, "html"))
 
+        logging.info(f"📧 Intentando conectar a SMTP: {settings.SMTP_HOST}:{settings.SMTP_PORT}")
+        
         if settings.SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30)
         else:
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30)
             server.starttls()
 
+        logging.info(f"📧 Autenticando con usuario: {settings.SMTP_USER}")
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        
+        logging.info(f"📧 Enviando mensaje a {to_email}")
         server.send_message(msg)
         server.quit()
         
-        logging.info(f"✅ Correo enviado a {to_email}")
+        logging.info(f"✅ Correo enviado exitosamente a {to_email}")
+    except smtplib.SMTPConnectError as e:
+        logging.error(f"❌ Error de conexión SMTP: No se pudo conectar a {settings.SMTP_HOST}:{settings.SMTP_PORT}")
+        logging.error(f"   Detalle: {e}")
+        logging.error(f"   Verifica que el servidor SMTP sea accesible y que el puerto no esté bloqueado por firewall")
+    except smtplib.SMTPAuthenticationError as e:
+        logging.error(f"❌ Error de autenticación SMTP: Credenciales incorrectas")
+        logging.error(f"   Detalle: {e}")
+    except OSError as e:
+        error_code = getattr(e, 'errno', None)
+        logging.error(f"❌ Error de red (OSError): {e}")
+        logging.error(f"   Código de error: {error_code}")
+        logging.error(f"   El servidor no puede alcanzar {settings.SMTP_HOST}:{settings.SMTP_PORT}")
+        if error_code == 101:  # Network is unreachable
+            logging.error(f"   ⚠️ Red no alcanzable - Posibles causas:")
+            logging.error(f"      • El servidor SMTP no es accesible desde este servidor")
+            logging.error(f"      • Firewall bloqueando conexiones salientes al puerto {settings.SMTP_PORT}")
+            logging.error(f"      • Problema de DNS (no puede resolver {settings.SMTP_HOST})")
+            logging.error(f"      • El servidor está en una red restringida")
+        logging.error(f"   Verifica:")
+        logging.error(f"      • SMTP_HOST está correcto: {settings.SMTP_HOST}")
+        logging.error(f"      • El puerto {settings.SMTP_PORT} no está bloqueado")
+        logging.error(f"      • Si estás en Railway/cloud, verifica que permita conexiones SMTP salientes")
     except Exception as e:
-        logging.error(f"❌ Error enviando correo: {e}")
+        logging.error(f"❌ Error enviando correo: {type(e).__name__}: {e}")
+        logging.error(f"   SMTP_HOST: {settings.SMTP_HOST}")
+        logging.error(f"   SMTP_PORT: {settings.SMTP_PORT}")
+        logging.error(f"   SMTP_USER: {settings.SMTP_USER}")
 
 def send_reset_password_email(to_email: str, token: str):
     """
