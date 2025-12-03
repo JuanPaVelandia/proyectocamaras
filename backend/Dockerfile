@@ -7,11 +7,14 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para compilar paquetes (si fuera necesario)
-# y cliente de postgres (libpq-dev) si usamos psycopg2, aunque asyncpg es pure python a veces requiere deps.
+# Instalar dependencias del sistema
+# libpq-dev: necesaria para psycopg2
+# netcat-openbsd: útil para scripts de espera (opcional, pero recomendado)
+# dos2unix: para corregir saltos de línea en scripts creados en Windows
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements e instalar
@@ -21,9 +24,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el código
 COPY . .
 
+# Preparar script de entrada
+COPY entrypoint.sh .
+RUN dos2unix entrypoint.sh && chmod +x entrypoint.sh
+
 # Exponer puerto
 EXPOSE 8000
 
-# Comando de inicio (usa run.py para leer PORT de Railway)
-CMD alembic upgrade head && python run.py
-
+# Usar el script de entrada
+CMD ["./entrypoint.sh"]

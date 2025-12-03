@@ -39,9 +39,9 @@ from app.models import all_models  # Import models to register them with Base
 config = context.config
 
 # 4. Override sqlalchemy.url with env var
-database_url = os.getenv("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+from app.core.config import settings
+if settings.DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
