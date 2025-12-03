@@ -98,6 +98,8 @@ def send_event_to_cloud(event_payload: dict):
         if CLOUD_API_KEY:
             headers["Authorization"] = f"Bearer {CLOUD_API_KEY}"
 
+        logging.debug(f"📤 Enviando evento a: {CLOUD_API_URL}")
+        
         resp = requests.post(
             CLOUD_API_URL,
             json=event_payload,
@@ -111,8 +113,20 @@ def send_event_to_cloud(event_payload: dict):
             logging.warning(
                 f"⚠ Error enviando a la nube: {resp.status_code} | {resp.text}"
             )
+            if resp.status_code == 502:
+                logging.error(f"❌ Error 502: El backend no está respondiendo")
+                logging.error(f"   Verifica que el backend esté funcionando en Railway")
+                logging.error(f"   URL intentada: {CLOUD_API_URL}")
+    except requests.exceptions.Timeout:
+        logging.error(f"❌ Timeout enviando evento a la nube (URL: {CLOUD_API_URL})")
+        logging.error(f"   El backend tardó más de 7 segundos en responder")
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"❌ Error de conexión a la nube: {e}")
+        logging.error(f"   URL intentada: {CLOUD_API_URL}")
+        logging.error(f"   Verifica que la URL sea correcta y el backend esté accesible")
     except Exception as e:
-        logging.error(f"❌ Excepción enviando evento a la nube: {e}")
+        logging.error(f"❌ Excepción enviando evento a la nube: {type(e).__name__}: {e}")
+        logging.error(f"   URL intentada: {CLOUD_API_URL}")
 
 
 # ---------- Normalización de evento de Frigate ----------

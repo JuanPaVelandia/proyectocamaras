@@ -20,9 +20,16 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
         # --- PASO 1: IDENTIFICACIÓN DEL DUEÑO (SEGURIDAD) ---
         customer_id = event_body.get("customer_id")
         
+        logging.info(f"🔍 Rule Engine - Procesando evento {event_db_id}")
+        logging.info(f"   - Customer ID recibido: {customer_id}")
+        logging.info(f"   - Cámara: {event_body.get('camera')}")
+        logging.info(f"   - Label: {event_body.get('label')}")
+        logging.info(f"   - Tipo: {event_body.get('frigate_type')}")
+        
         # Validación: Si el evento no tiene dueño, es peligroso procesarlo.
         if not customer_id:
             logging.warning(f"⚠️ Evento {event_db_id} rechazado: Falta 'customer_id'.")
+            logging.warning(f"   Campos disponibles en el evento: {list(event_body.keys())}")
             return
 
         # Buscamos al usuario dueño en la base de datos
@@ -30,7 +37,10 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
         
         if not owner_user:
             logging.warning(f"⚠️ Evento rechazado: El usuario '{customer_id}' no existe en la BD.")
+            logging.warning(f"   Verifica que el CUSTOMER_ID en el listener coincida con un username en la BD")
             return
+        
+        logging.info(f"✅ Usuario encontrado: {owner_user.username} (ID: {owner_user.id})")
 
         # Validar si el usuario pagó (El "Interruptor")
         # if not owner_user.is_active: 
