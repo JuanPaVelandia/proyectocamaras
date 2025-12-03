@@ -22,14 +22,28 @@ def send_email_via_resend(to_email: str, subject: str, html_content: str) -> boo
             "html": html_content
         }
         
-        logging.info(f"📧 Enviando correo vía Resend API a {to_email}")
+        logging.info(f"📧 Enviando correo vía Resend API")
+        logging.info(f"   De: {settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>")
+        logging.info(f"   Para: {to_email}")
+        logging.info(f"   Asunto: {subject}")
+        
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         
         if response.status_code == 200:
-            logging.info(f"✅ Correo enviado exitosamente vía Resend a {to_email}")
+            response_data = response.json()
+            email_id = response_data.get("id", "N/A")
+            logging.info(f"✅ Correo enviado exitosamente vía Resend")
+            logging.info(f"   Email ID: {email_id}")
+            logging.info(f"   Destinatario: {to_email}")
+            logging.info(f"   Puedes rastrear este email en: https://resend.com/emails/{email_id}")
+            logging.info(f"   💡 Si no recibes el correo, revisa:")
+            logging.info(f"      • Carpeta de Spam/Correo no deseado")
+            logging.info(f"      • Carpeta de Promociones (Gmail)")
+            logging.info(f"      • Dashboard de Resend para ver el estado real")
             return True
         else:
-            logging.error(f"❌ Error de Resend API: {response.status_code} - {response.text}")
+            logging.error(f"❌ Error de Resend API: {response.status_code}")
+            logging.error(f"   Respuesta: {response.text}")
             return False
     except Exception as e:
         logging.error(f"❌ Error enviando correo vía Resend: {type(e).__name__}: {e}")
