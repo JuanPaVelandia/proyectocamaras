@@ -22,9 +22,9 @@ def send_email(to_email: str, subject: str, html_content: str):
         msg.attach(MIMEText(html_content, "html"))
 
         if settings.SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT)
+            server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
         else:
-            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
+            server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
             server.starttls()
 
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
