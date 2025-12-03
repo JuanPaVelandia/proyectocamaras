@@ -27,6 +27,7 @@ $ItemsToCopy = @(
     "python-listener",
     "docker-compose.yml",
     "docker-compose.prod.yml",
+    "docker-compose.client.yml",
     "install.sh",
     "install.ps1",
     "setup_ssl.sh",
