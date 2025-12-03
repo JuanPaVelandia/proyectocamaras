@@ -30,6 +30,12 @@ echo "✅ Base de datos conectada."
 
 # 2. Ejecutar migraciones
 echo "🔄 Ejecutando migraciones..."
+# Si se define FORCE_STAMP, marcamos la DB como actualizada sin ejecutar migraciones
+if [ "$FORCE_STAMP" = "true" ]; then
+    echo "⚠️ FORCE_STAMP detectado. Marcando base de datos como 'head'..."
+    alembic stamp head
+fi
+
 alembic upgrade head
 echo "✅ Migraciones completadas."
 
