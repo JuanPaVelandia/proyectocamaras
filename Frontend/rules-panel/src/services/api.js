@@ -42,6 +42,12 @@ export function getApiBase() {
   return getApiBaseUrl();
 }
 
+// Función para obtener el baseURL correcto (siempre HTTPS en producción)
+function getCorrectBaseURL() {
+  // Usar la misma lógica que getApiBaseUrl para asegurar consistencia
+  return getApiBaseUrl();
+}
+
 // Log para debug
 if (typeof window !== 'undefined') {
   console.log('🔗 URL del API configurada:', API_BASE);
@@ -72,12 +78,6 @@ if (typeof window !== 'undefined' && isDevelopment) {
     protocol: window.location.protocol,
     isDevelopment
   });
-}
-
-// Función para obtener el baseURL correcto (siempre HTTPS en producción)
-function getCorrectBaseURL() {
-  // Usar la misma lógica que getApiBaseUrl para asegurar consistencia
-  return getApiBaseUrl();
 }
 
 // Función para construir la URL completa con HTTPS garantizado
