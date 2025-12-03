@@ -1,1 +1,0 @@
-http://localhost:5173/reset-password?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ0eXBlIjoicmVzZXQiLCJleHAiOjE3NjUyMzI0MjV9.faGWx1bL8mRw07GqH5v75Jq2tFbO4sQJqopM1Ut58aA

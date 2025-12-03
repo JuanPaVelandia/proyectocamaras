@@ -80,6 +80,38 @@ whatsapp_phone_id.txt
 # Frigate specific
 config/backup_config.yaml
 
-# Test files
-test_*.py
-*_test.py
+# Test files (keep test structure, ignore test data)
+# test_*.py
+# *_test.py
+
+# Build artifacts
+Frontend/rules-panel/dist/
+**/dist/
+**/build/
+
+# Python cache
+**/__pycache__/
+*.pyc
+
+# Database files (local)
+backend/events.db
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+link.txt
+logs.txt
+response.json
+new_link.json
+final_link.md
+
+# Media recordings (keep structure, ignore content)
+media/recordings/**
+!media/recordings/.gitkeep
+media/clips/**
+!media/clips/.gitkeep

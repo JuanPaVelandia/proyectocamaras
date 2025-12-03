@@ -37,16 +37,11 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
-    # EMAIL - SMTP (tradicional)
+    # EMAIL
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    
-    # EMAIL - Resend (API REST, recomendado para Railway/cloud)
-    RESEND_API_KEY: Optional[str] = None
-    
-    # EMAIL - Configuración común
     EMAILS_FROM_EMAIL: str = "noreply@vidria.com"
     EMAILS_FROM_NAME: str = "Vidria Security"
 

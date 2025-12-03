@@ -2,51 +2,21 @@ from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from pydantic import BaseModel, EmailStr, validator
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import timedelta
 import logging
 import re
 from app.db.session import SessionLocal
 from app.models.all_models import UserDB
 from app.core.security import create_access_token, verify_token, hash_password, verify_password
-from app.utils.email_utils import send_reset_password_email
-
 router = APIRouter()
-
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-def get_current_user(
-    x_admin_token: str = Header(..., alias="X-Admin-Token"),
-    db: Session = Depends(get_db)
-) -> UserDB:
-    """Obtiene el usuario actual desde el token JWT"""
-    if not x_admin_token:
-        raise HTTPException(status_code=401, detail="Missing X-Admin-Token header")
-
-    # Verificar JWT
-    payload = verify_token(x_admin_token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-
-    user = db.query(UserDB).get(user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return user
-
-# Modelos de Request
 class LoginRequest(BaseModel):
     username: str
     password: str
-
 class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
@@ -77,71 +47,6 @@ class RegisterRequest(BaseModel):
         if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
             raise ValueError('Número de WhatsApp inválido (formato internacional: +573001234567)')
         return v
-
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-    @validator('new_password')
-    def validate_new_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('La contraseña debe tener al menos 8 caracteres')
-        if not re.search(r'[A-Z]', v):
-            raise ValueError('La contraseña debe contener al menos una mayúscula')
-        if not re.search(r'[0-9]', v):
-            raise ValueError('La contraseña debe contener al menos un número')
-        return v
-
-class UpdateProfileRequest(BaseModel):
-    email: Optional[EmailStr] = None
-    whatsapp_number: Optional[str] = None
-    whatsapp_notifications_enabled: Optional[bool] = None
-    current_password: Optional[str] = None
-    new_password: Optional[str] = None
-
-    @validator('whatsapp_number')
-    def validate_whatsapp(cls, v):
-        if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
-            raise ValueError('Número de WhatsApp inválido (formato internacional: +573001234567)')
-        return v
-
-    @validator('new_password')
-    def validate_new_password(cls, v):
-        if v:
-            if len(v) < 8:
-                raise ValueError('La contraseña debe tener al menos 8 caracteres')
-            if not re.search(r'[A-Z]', v):
-                raise ValueError('La contraseña debe contener al menos una mayúscula')
-            if not re.search(r'[0-9]', v):
-                raise ValueError('La contraseña debe contener al menos un número')
-        return v
-
-# Endpoints
-@router.post("/login")
-def login(req: LoginRequest, db: Session = Depends(get_db)):
-    """Autentica un usuario y devuelve un token JWT"""
-    user = db.query(UserDB).filter(UserDB.username == req.username).first()
-    
-    if not user or not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    
-    token = create_access_token(data={"user_id": user.id, "username": user.username})
-    
-    logging.info(f"✅ Usuario autenticado: {user.username}")
-    
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }
-    }
-
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     """Registra un nuevo usuario"""
@@ -177,75 +82,23 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # Crear token automáticamente
     token = create_access_token(data={"user_id": new_user.id, "username": new_user.username})
     
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": new_user.id,
-            "username": new_user.username,
-            "email": new_user.email
-        }
-    }
+    if not x_admin_token:
+        raise HTTPException(status_code=401, detail="Missing X-Admin-Token header")
 
-@router.post("/forgot-password")
-def forgot_password(
-    req: ForgotPasswordRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """Envía un correo con el enlace para recuperar la contraseña"""
-    
-    # Buscar usuario por email
-    user = db.query(UserDB).filter(UserDB.email == req.email).first()
-    
-    # Por seguridad, siempre devolvemos éxito aunque el email no exista
-    # para evitar que se pueda descubrir qué emails están registrados
-    if not user:
-        logging.warning(f"⚠️ Intento de recuperación de contraseña para email no registrado: {req.email}")
-        return {"message": "Si el email existe, se enviará un correo con las instrucciones"}
-    
-    # Crear token de recuperación (expira en 15 minutos)
-    reset_token = create_access_token(
-        data={
-            "user_id": user.id,
-            "username": user.username,
-            "type": "reset"
-        },
-        expires_delta=timedelta(minutes=15)
-    )
-    
-    # Enviar correo en background
-    background_tasks.add_task(send_reset_password_email, user.email, reset_token)
-    
-    logging.info(f"✅ Correo de recuperación enviado a: {user.email}")
-    
-    return {"message": "Si el email existe, se enviará un correo con las instrucciones"}
-
-@router.post("/reset-password")
-def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """Restablece la contraseña usando el token de recuperación"""
-    
-    # Verificar token
-    payload = verify_token(req.token)
+    # Verificar JWT
+    payload = verify_token(x_admin_token)
     if not payload:
-        raise HTTPException(status_code=400, detail="Token inválido o expirado")
-        
-    if payload.get("type") != "reset":
-        raise HTTPException(status_code=400, detail="Token inválido para restablecimiento")
-        
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
     user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
     user = db.query(UserDB).get(user_id)
-    
     if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        
-    # Actualizar contraseña
-    user.password_hash = hash_password(req.new_password)
-    db.commit()
-    
-    logging.info(f"✅ Contraseña restablecida para: {user.username}")
-    
-    return {"message": "Contraseña restablecida exitosamente"}
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
 
 @router.get("/me")
 def get_user_info(current_user: UserDB = Depends(get_current_user)):
@@ -258,6 +111,30 @@ def get_user_info(current_user: UserDB = Depends(get_current_user)):
         "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
+
+class UpdateProfileRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    whatsapp_number: Optional[str] = None
+    whatsapp_notifications_enabled: Optional[bool] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+    @validator('whatsapp_number')
+    def validate_whatsapp(cls, v):
+        if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
+            raise ValueError('Número de WhatsApp inválido (formato internacional: +573001234567)')
+        return v
+
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if v:
+            if len(v) < 8:
+                raise ValueError('La contraseña debe tener al menos 8 caracteres')
+            if not re.search(r'[A-Z]', v):
+                raise ValueError('La contraseña debe contener al menos una mayúscula')
+            if not re.search(r'[0-9]', v):
+                raise ValueError('La contraseña debe contener al menos un número')
+        return v
 
 @router.put("/me")
 def update_user_profile(
@@ -306,3 +183,38 @@ def update_user_profile(
             "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled
         }
     }
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('La contraseña debe tener al menos 8 caracteres')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('La contraseña debe contener al menos una mayúscula')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('La contraseña debe contener al menos un número')
+        return v
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Restablece la contraseña usando el token de recuperación"""
+    
+    # Verificar token
+    payload = verify_token(req.token)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Token inválido o expirado")
+        
+    if payload.get("type") != "reset":
+        raise HTTPException(status_code=400, detail="Token inválido para restablecimiento")
+        
+    user_id = payload.get("user_id")
+    user = db.query(UserDB).get(user_id)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+    # Actualizar contraseña
+    user.password_hash = hash_password(req.new_password)
+    db.commit()
+    
+    logging.info(f"✅ Contraseña restablecida para: {user.username}")
+    
+    return {"message": "Contraseña restablecida exitosamente"}

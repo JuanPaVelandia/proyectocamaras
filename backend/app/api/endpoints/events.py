@@ -47,24 +47,6 @@ async def receive_event(
 
     body = await request.json()
 
-    # TEMPORAL: Validación deshabilitada para testing
-    # TODO: Reactivar después de las pruebas
-    # from app.models.all_models import CameraDB
-    # camera_name = body.get("camera")
-    #
-    # db_check = SessionLocal()
-    # try:
-    #     camera = db_check.query(CameraDB).filter(
-    #         CameraDB.name == camera_name,
-    #         CameraDB.enabled == True
-    #     ).first()
-    #
-    #     if not camera:
-    #         logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la base de datos o está deshabilitada.")
-    #         return {"status": "ignored", "reason": "camera_not_in_database"}
-    # finally:
-    #     db_check.close()
-
     # Mejorar logging para debugging
     frigate_type = body.get('frigate_type') or body.get('type')
     customer_id = body.get('customer_id')

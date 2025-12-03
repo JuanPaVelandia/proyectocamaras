@@ -11,8 +11,9 @@ import paho.mqtt.client as mqtt
 import requests
 from dotenv import load_dotenv
 
-# Cargar variables .env
-load_dotenv()
+# Cargar variables .env (solo si no están ya definidas como variables de entorno)
+# Esto permite que las variables de entorno del sistema/docker tengan prioridad
+load_dotenv(override=False)
 
 logging.basicConfig(
     level=logging.INFO,
