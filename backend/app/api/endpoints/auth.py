@@ -2,18 +2,45 @@ from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from pydantic import BaseModel, EmailStr, validator
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import timedelta
 import logging
 import re
 from app.db.session import SessionLocal
 from app.models.all_models import UserDB
 from app.core.security import create_access_token, verify_token, hash_password, verify_password
+from app.utils.email_utils import send_reset_password_email
+
 router = APIRouter()
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+def get_current_user(
+    x_admin_token: str = Header(..., alias="X-Admin-Token"),
+    db: Session = Depends(get_db)
+) -> UserDB:
+    """Obtiene el usuario actual desde el token JWT"""
+    if not x_admin_token:
+        raise HTTPException(status_code=401, detail="Missing X-Admin-Token header")
+
+    # Verificar JWT
+    payload = verify_token(x_admin_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    user = db.query(UserDB).get(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -47,6 +74,33 @@ class RegisterRequest(BaseModel):
         if v and not re.match(r'^\+?[1-9]\d{1,14}$', v):
             raise ValueError('Número de WhatsApp inválido (formato internacional: +573001234567)')
         return v
+@router.post("/login")
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    """Inicia sesión y retorna un token JWT"""
+    user = db.query(UserDB).filter(UserDB.username == req.username).first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    
+    # Crear token
+    token = create_access_token(data={"user_id": user.id, "username": user.username})
+    
+    logging.info(f"✅ Usuario autenticado: {user.username}")
+    
+    return {
+        "access_token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "whatsapp_number": user.whatsapp_number,
+            "whatsapp_notifications_enabled": user.whatsapp_notifications_enabled
+        }
+    }
+
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     """Registra un nuevo usuario"""
@@ -82,23 +136,16 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # Crear token automáticamente
     token = create_access_token(data={"user_id": new_user.id, "username": new_user.username})
     
-    if not x_admin_token:
-        raise HTTPException(status_code=401, detail="Missing X-Admin-Token header")
-
-    # Verificar JWT
-    payload = verify_token(x_admin_token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-
-    user = db.query(UserDB).get(user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return user
+    return {
+        "access_token": token,
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "whatsapp_number": new_user.whatsapp_number,
+            "whatsapp_notifications_enabled": new_user.whatsapp_notifications_enabled
+        }
+    }
 
 @router.get("/me")
 def get_user_info(current_user: UserDB = Depends(get_current_user)):
@@ -183,6 +230,14 @@ def update_user_profile(
             "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled
         }
     }
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
     @validator('new_password')
     def validate_new_password(cls, v):
         if len(v) < 8:
@@ -192,6 +247,33 @@ def update_user_profile(
         if not re.search(r'[0-9]', v):
             raise ValueError('La contraseña debe contener al menos un número')
         return v
+
+@router.post("/forgot-password")
+def forgot_password(
+    req: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Envía un correo con el enlace para recuperar la contraseña"""
+    user = db.query(UserDB).filter(UserDB.email == req.email).first()
+    
+    # Por seguridad, siempre retornamos éxito aunque el usuario no exista
+    if not user:
+        logging.warning(f"⚠️ Intento de recuperación de contraseña para email no registrado: {req.email}")
+        return {"message": "Si el email existe, recibirás un correo con las instrucciones"}
+    
+    # Crear token de recuperación
+    reset_token = create_access_token(
+        data={"user_id": user.id, "type": "reset"},
+        expires_delta=timedelta(hours=1)  # 1 hora
+    )
+    
+    # Enviar correo en background
+    background_tasks.add_task(send_reset_password_email, user.email, reset_token)
+    
+    logging.info(f"✅ Correo de recuperación enviado a: {user.email}")
+    
+    return {"message": "Si el email existe, recibirás un correo con las instrucciones"}
 
 @router.post("/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
