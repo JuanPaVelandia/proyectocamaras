@@ -30,7 +30,7 @@ echo "✅ Base de datos conectada."
 
 # 2. Ejecutar migraciones
 echo "🔄 Ejecutando migraciones..."
-alembic upgrade head
+python -m alembic upgrade head
 echo "✅ Migraciones completadas."
 
 # 3. Iniciar Gunicorn
