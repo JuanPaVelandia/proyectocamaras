@@ -51,19 +51,28 @@ export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegiste
             });
 
             console.log("✅ Respuesta recibida:", res.data);
-            localStorage.setItem("adminToken", res.data.token);
+            
+            // El backend devuelve access_token, no token
+            const token = res.data.access_token || res.data.token;
+            if (!token) {
+                throw new Error("No se recibió token en la respuesta");
+            }
+            
+            localStorage.setItem("adminToken", token);
 
+            // El backend devuelve los datos del usuario en res.data.user
+            const user = res.data.user || res.data;
             const userData = {
-                username: res.data.username,
-                email: res.data.email,
-                whatsapp_number: res.data.whatsapp_number
+                username: user.username,
+                email: user.email,
+                whatsapp_number: user.whatsapp_number || ""
             };
             localStorage.setItem("userData", JSON.stringify(userData));
 
-            addToast(`Bienvenido, ${res.data.username}!`, "success");
+            addToast(`Bienvenido, ${user.username}!`, "success");
 
             setTimeout(() => {
-                onLoginSuccess(res.data.token);
+                onLoginSuccess(token);
             }, 500);
         } catch (err) {
             console.error("❌ Error en login:", err);

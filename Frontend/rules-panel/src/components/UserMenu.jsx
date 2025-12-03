@@ -69,7 +69,7 @@ export function UserMenu({ onLogout, onNavigateToProfile, onNavigateToLanding })
     }, [isOpen]);
 
     const getInitials = () => {
-        if (!user) return "?";
+        if (!user || !user.username) return "?";
         const names = user.username.split(" ");
         if (names.length >= 2) {
             return (names[0][0] + names[1][0]).toUpperCase();
