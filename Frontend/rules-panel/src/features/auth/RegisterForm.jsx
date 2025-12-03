@@ -91,19 +91,27 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin, onBackToLanding
                 whatsapp_notifications_enabled: formData.whatsapp_notifications_enabled,
             });
 
-            localStorage.setItem("adminToken", res.data.token);
+            // El backend retorna { access_token, user: { username, email, ... } }
+            const token = res.data.access_token || res.data.token;
+            const user = res.data.user || res.data;
+            
+            if (!token) {
+                throw new Error("No se recibió token del servidor");
+            }
+            
+            localStorage.setItem("adminToken", token);
 
             const userData = {
-                username: res.data.username,
-                email: res.data.email,
-                whatsapp_number: res.data.whatsapp_number
+                username: user.username || "",
+                email: user.email || "",
+                whatsapp_number: user.whatsapp_number || ""
             };
             localStorage.setItem("userData", JSON.stringify(userData));
 
-            addToast(`¡Bienvenido, ${res.data.username}!`, "success");
+            addToast(`¡Bienvenido, ${user.username || "Usuario"}!`, "success");
 
             setTimeout(() => {
-                onRegisterSuccess(res.data.token);
+                onRegisterSuccess(token);
             }, 500);
         } catch (err) {
             console.error("❌ Error en registro:", err);

@@ -36,9 +36,9 @@ export function UserMenu({ onLogout, onNavigateToProfile, onNavigateToLanding })
 
             const response = await api.get("/api/auth/me");
             const userData = {
-                username: response.data.username,
-                email: response.data.email,
-                whatsapp_number: response.data.whatsapp_number
+                username: response.data.username || response.data.user?.username || "",
+                email: response.data.email || response.data.user?.email || "",
+                whatsapp_number: response.data.whatsapp_number || response.data.user?.whatsapp_number || ""
             };
 
             // Guardar en localStorage para futuras sesiones
@@ -69,7 +69,7 @@ export function UserMenu({ onLogout, onNavigateToProfile, onNavigateToLanding })
     }, [isOpen]);
 
     const getInitials = () => {
-        if (!user) return "?";
+        if (!user || !user.username) return "?";
         const names = user.username.split(" ");
         if (names.length >= 2) {
             return (names[0][0] + names[1][0]).toUpperCase();
