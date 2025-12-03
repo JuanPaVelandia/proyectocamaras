@@ -152,13 +152,23 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                 logging.info(f"🔕 Usuario {owner_user.username} tiene notificaciones apagadas o sin número.")
                 continue
 
-            # Construir mensaje (Aquí luego implementaremos Templates)
-            msg = (
-                f"🔔 *Alerta Vidria*\n"
-                f"📹 Cámara: {camera_name}\n"
-                f"🔍 Objeto: {label}\n"
-                f"📊 Confianza: {int(final_score * 100)}%"
-            )
+            # Construir mensaje - Usar custom_message si existe, sino usar template por defecto
+            if rule.custom_message:
+                # Usar mensaje personalizado de la regla
+                # Reemplazar variables en el template: {camera}, {label}, {score}, {confidence}
+                msg = rule.custom_message
+                msg = msg.replace("{camera}", camera_name or "N/A")
+                msg = msg.replace("{label}", label or "N/A")
+                msg = msg.replace("{score}", str(final_score))
+                msg = msg.replace("{confidence}", f"{int(final_score * 100)}%")
+            else:
+                # Mensaje por defecto
+                msg = (
+                    f"🔔 *Alerta Vidria*\n"
+                    f"📹 Cámara: {camera_name}\n"
+                    f"🔍 Objeto: {label}\n"
+                    f"📊 Confianza: {int(final_score * 100)}%"
+                )
 
             # Carga LAZY de la imagen (Solo si vamos a enviar)
             snapshot_b64 = None
