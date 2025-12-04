@@ -1,0 +1,41 @@
+{
+  "name": "frigate-health-panel",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "description": "Health panel for Frigate stack (proxy/listener/Frigate) with Docker checks",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^28.2.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.vidria.healthpanel",
+    "productName": "Vidria",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "logo.png"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "logo.icns"
+    }
+  }
+}
