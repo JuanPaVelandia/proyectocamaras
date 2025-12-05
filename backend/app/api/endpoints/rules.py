@@ -7,6 +7,7 @@ import json
 from app.db.session import SessionLocal
 from app.models.all_models import RuleDB, RuleHitDB, UserDB, EventDB
 from app.api.endpoints.events import get_current_user # Reutilizar dependency
+from app.utils.timezone_utils import convert_local_time_to_utc
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -24,6 +25,18 @@ def create_rule(
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Obtener timezone del usuario (default: UTC)
+    user_timezone = current_user.timezone or "UTC"
+    
+    # Convertir horas de la zona horaria del usuario a UTC
+    time_start = rule.get("time_start")
+    time_end = rule.get("time_end")
+    
+    if time_start:
+        time_start = convert_local_time_to_utc(time_start, user_timezone)
+    if time_end:
+        time_end = convert_local_time_to_utc(time_end, user_timezone)
+    
     new_rule = RuleDB(
         name=rule.get("name", "Regla sin nombre"),
         enabled=rule.get("enabled", True),
@@ -33,8 +46,8 @@ def create_rule(
         min_score=rule.get("min_score"),
         min_duration_seconds=rule.get("min_duration_seconds"),
         custom_message=rule.get("custom_message"),
-        time_start=rule.get("time_start"),
-        time_end=rule.get("time_end"),
+        time_start=time_start,
+        time_end=time_end,
         user_id=current_user.id,
     )
 
@@ -42,6 +55,8 @@ def create_rule(
     db.commit()
     db.refresh(new_rule)
 
+    logging.info(f"✅ Regla creada: {new_rule.name} (horas convertidas de {user_timezone} a UTC: {time_start} - {time_end})")
+    
     return {"status": "ok", "rule_id": new_rule.id}
 
 
@@ -163,13 +178,24 @@ def update_rule(
         rule.min_duration_seconds = float(data["min_duration_seconds"]) if data["min_duration_seconds"] else None
     if "custom_message" in data:
         rule.custom_message = data["custom_message"] if data["custom_message"] else None
+    
+    # Convertir horas de la zona horaria del usuario a UTC
+    user_timezone = current_user.timezone or "UTC"
     if "time_start" in data:
-        rule.time_start = data["time_start"] if data["time_start"] else None
+        if data["time_start"]:
+            rule.time_start = convert_local_time_to_utc(data["time_start"], user_timezone)
+        else:
+            rule.time_start = None
     if "time_end" in data:
-        rule.time_end = data["time_end"] if data["time_end"] else None
+        if data["time_end"]:
+            rule.time_end = convert_local_time_to_utc(data["time_end"], user_timezone)
+        else:
+            rule.time_end = None
 
     db.commit()
     db.refresh(rule)
+    
+    logging.info(f"✅ Regla actualizada: {rule.name} (horas convertidas de {user_timezone} a UTC)")
 
     return {
         "status": "ok",

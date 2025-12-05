@@ -24,6 +24,10 @@ class UserDB(Base):
     # Subscription fields
     is_active = Column(Boolean, default=True, nullable=False)
     expiration_date = Column(DateTime, nullable=True)
+    
+    # Timezone del usuario (ej: "America/Bogota", "America/Mexico_City")
+    # Se usa para convertir horas de reglas de la zona horaria local a UTC
+    timezone = Column(String(50), nullable=True, default="UTC")
 
     rules = relationship("RuleDB", back_populates="user")
 
