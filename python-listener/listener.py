@@ -37,6 +37,16 @@ SITE_ID = os.getenv("SITE_ID", "sede_demo")
 # URL de Frigate local para descargar snapshots
 FRIGATE_URL = os.getenv("FRIGATE_URL", "http://frigate:5000")
 
+# Tamaño máximo del snapshot en base64 (en bytes). Si excede, no se envía.
+# Por defecto 150KB en base64 (~110KB de imagen original)
+# Nota: El error 431 puede ocurrir con payloads > 200KB totales
+MAX_SNAPSHOT_SIZE_B64 = int(os.getenv("MAX_SNAPSHOT_SIZE_B64", "150000"))
+
+# Configuración de compresión de imágenes
+SNAPSHOT_MAX_WIDTH = int(os.getenv("SNAPSHOT_MAX_WIDTH", "800"))  # Ancho máximo en píxeles
+SNAPSHOT_MAX_HEIGHT = int(os.getenv("SNAPSHOT_MAX_HEIGHT", "600"))  # Alto máximo en píxeles
+SNAPSHOT_QUALITY = int(os.getenv("SNAPSHOT_QUALITY", "75"))  # Calidad JPEG (1-100, menor = más compresión)
+
 # Mapeo de nombres de cámaras: local_name:remote_name,local_name2:remote_name2
 # Lo que está haciendo es un arreglo para que el nombre de la cámara en frigate sea el mismo que el nombre de la cámara en la nube
 ENV_CAMERA_MAPPING_STR = os.getenv("CAMERA_MAPPING", "")
@@ -66,9 +76,77 @@ def compute_api_base() -> str:
     return url  # fallback
 
 
+# ---------- Función para comprimir imagen ----------
+def compress_image(image_bytes: bytes, max_width: int = None, max_height: int = None, quality: int = 75) -> bytes:
+    """
+    Comprime una imagen JPEG reduciendo tamaño y/o calidad.
+    
+    Args:
+        image_bytes: Bytes de la imagen original
+        max_width: Ancho máximo en píxeles (None = mantener proporción)
+        max_height: Alto máximo en píxeles (None = mantener proporción)
+        quality: Calidad JPEG (1-100, menor = más compresión)
+    
+    Returns:
+        Bytes de la imagen comprimida
+    """
+    try:
+        from PIL import Image
+        from io import BytesIO
+        
+        # Abrir imagen desde bytes
+        img = Image.open(BytesIO(image_bytes))
+        original_size = len(image_bytes)
+        
+        # Convertir a RGB si es necesario (para JPEG)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # Crear fondo blanco para imágenes con transparencia
+            rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            rgb_img.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = rgb_img
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Redimensionar si es necesario
+        if max_width or max_height:
+            # Calcular nuevo tamaño manteniendo proporción
+            width, height = img.size
+            ratio = min(
+                (max_width or width) / width,
+                (max_height or height) / height
+            )
+            
+            # Solo redimensionar si la imagen es más grande
+            if ratio < 1.0:
+                new_width = int(width * ratio)
+                new_height = int(height * ratio)
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                logging.debug(f"📐 Imagen redimensionada: {width}x{height} → {new_width}x{new_height}")
+        
+        # Comprimir a JPEG
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=quality, optimize=True)
+        compressed_bytes = output.getvalue()
+        compressed_size = len(compressed_bytes)
+        
+        # Log de compresión
+        compression_ratio = (1 - compressed_size / original_size) * 100
+        logging.info(f"🗜️ Imagen comprimida: {original_size} bytes → {compressed_size} bytes ({compression_ratio:.1f}% reducción)")
+        
+        return compressed_bytes
+    except ImportError:
+        logging.warning("⚠ Pillow no está instalado, no se puede comprimir la imagen")
+        return image_bytes
+    except Exception as e:
+        logging.error(f"❌ Error comprimiendo imagen: {e}")
+        return image_bytes  # Retornar original si falla
+
+
 # ---------- Función para descargar snapshot de Frigate ----------
 def download_snapshot(event_id: str) -> str:
-    """Descarga el snapshot de Frigate y lo retorna como base64."""
+    """Descarga el snapshot de Frigate, lo comprime y lo retorna como base64."""
     try:
         snapshot_url = f"{FRIGATE_URL}/api/events/{event_id}/snapshot.jpg"
         logging.info(f"📸 Descargando snapshot: {snapshot_url}")
@@ -76,9 +154,21 @@ def download_snapshot(event_id: str) -> str:
         resp = requests.get(snapshot_url, timeout=5)
 
         if resp.status_code == 200:
+            original_size = len(resp.content)
+            
+            # Comprimir imagen antes de convertir a base64
+            compressed_bytes = compress_image(
+                resp.content,
+                max_width=SNAPSHOT_MAX_WIDTH,
+                max_height=SNAPSHOT_MAX_HEIGHT,
+                quality=SNAPSHOT_QUALITY
+            )
+            
             # Convertir a base64
-            snapshot_b64 = base64.b64encode(resp.content).decode('utf-8')
-            logging.info(f"✔ Snapshot descargado ({len(resp.content)} bytes)")
+            snapshot_b64 = base64.b64encode(compressed_bytes).decode('utf-8')
+            final_size = len(snapshot_b64)
+            
+            logging.info(f"✔ Snapshot descargado y comprimido: {original_size} bytes → {len(compressed_bytes)} bytes (base64: {final_size} bytes)")
             return snapshot_b64
         else:
             logging.warning(f"⚠ No se pudo descargar snapshot: {resp.status_code}")
@@ -99,7 +189,27 @@ def send_event_to_cloud(event_payload: dict):
         if CLOUD_API_KEY:
             headers["Authorization"] = f"Bearer {CLOUD_API_KEY}"
 
-        logging.debug(f"📤 Enviando evento a: {CLOUD_API_URL}")
+        # Calcular tamaño aproximado del payload
+        import json as json_lib
+        payload_size = len(json_lib.dumps(event_payload))
+        snapshot_size = len(event_payload.get('snapshot_base64', ''))
+        
+        # Verificar tamaño total del payload antes de enviar
+        # El error 431 generalmente ocurre con payloads > 200KB
+        MAX_PAYLOAD_SIZE = 180000  # 180KB para dejar margen
+        
+        if payload_size > MAX_PAYLOAD_SIZE:
+            logging.warning(f"⚠ Payload demasiado grande ({payload_size} bytes), removiendo snapshot...")
+            if 'snapshot_base64' in event_payload:
+                snapshot_size = len(event_payload.get('snapshot_base64', ''))
+                del event_payload['snapshot_base64']
+                payload_size = len(json_lib.dumps(event_payload))
+                logging.info(f"   Snapshot removido ({snapshot_size} bytes), nuevo tamaño: {payload_size} bytes")
+        
+        if snapshot_size > 0:
+            logging.debug(f"📤 Enviando evento con snapshot ({snapshot_size} bytes base64, payload total: ~{payload_size} bytes)")
+        else:
+            logging.debug(f"📤 Enviando evento a: {CLOUD_API_URL} (payload: ~{payload_size} bytes)")
         
         resp = requests.post(
             CLOUD_API_URL,
@@ -114,7 +224,27 @@ def send_event_to_cloud(event_payload: dict):
             logging.warning(
                 f"⚠ Error enviando a la nube: {resp.status_code} | {resp.text}"
             )
-            if resp.status_code == 502:
+            if resp.status_code == 431:
+                logging.error(f"❌ Error 431: Payload demasiado grande (~{payload_size} bytes)")
+                logging.error(f"   El snapshot en base64 es muy grande ({snapshot_size} bytes)")
+                # Reintentar sin el snapshot
+                if 'snapshot_base64' in event_payload:
+                    logging.info(f"🔄 Reintentando envío sin snapshot...")
+                    event_without_snapshot = event_payload.copy()
+                    del event_without_snapshot['snapshot_base64']
+                    retry_resp = requests.post(
+                        CLOUD_API_URL,
+                        json=event_without_snapshot,
+                        headers=headers,
+                        timeout=7
+                    )
+                    if 200 <= retry_resp.status_code < 300:
+                        logging.info(f"✔ Evento enviado sin snapshot (status {retry_resp.status_code})")
+                    else:
+                        logging.error(f"❌ Error al reintentar sin snapshot: {retry_resp.status_code} | {retry_resp.text}")
+                else:
+                    logging.error(f"   Considera reducir el tamaño del payload")
+            elif resp.status_code == 502:
                 logging.error(f"❌ Error 502: El backend no está respondiendo")
                 logging.error(f"   Verifica que el backend esté funcionando en Railway")
                 logging.error(f"   URL intentada: {CLOUD_API_URL}")
@@ -152,7 +282,7 @@ def normalize_frigate_event(data: dict) -> dict:
     if camera and camera in CAMERA_MAPPING:
         original_camera = camera
         camera = CAMERA_MAPPING[camera]
-        logging.info(f"🔄 Cámara mapeada: '{original_camera}' → '{camera}'")
+        logging.debug(f"🔄 Cámara mapeada: '{original_camera}' → '{camera}'")
 
     label = base.get("label")
     sub_label = base.get("sub_label")
@@ -409,7 +539,14 @@ def on_message(client, userdata, msg):
     if event_id and has_snapshot and frigate_type == 'end':
         snapshot_b64 = download_snapshot(event_id)
         if snapshot_b64:
-            normalized_event['snapshot_base64'] = snapshot_b64
+            snapshot_size = len(snapshot_b64)
+            if snapshot_size > MAX_SNAPSHOT_SIZE_B64:
+                logging.warning(
+                    f"⚠ Snapshot demasiado grande ({snapshot_size} bytes), "
+                    f"excede el límite de {MAX_SNAPSHOT_SIZE_B64} bytes. No se incluirá en el evento."
+                )
+            else:
+                normalized_event['snapshot_base64'] = snapshot_b64
 
     send_event_to_cloud(normalized_event)
 

@@ -1,0 +1,258 @@
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const { exec, spawn } = require('child_process');
+
+function getEnvWithPath() {
+  const env = { ...process.env };
+  if (os.platform() === 'win32') {
+    const extraWin = [
+      'C\\\:\\\Windows\\\System32',
+      'C\\\:\\\Windows',
+      'C\\\:\\\Program Files\\\Docker\\\Docker',
+      'C\\\:\\\Program Files\\\Docker\\\Docker\\\resources\\\bin',
+      'C\\\:\\\ProgramData\\\DockerDesktop\\\version-bin',
+    ].join(path.delimiter);
+    env.PATH = env.PATH ? env.PATH + path.delimiter + extraWin : extraWin;
+  } else {
+    const extra = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(path.delimiter);
+    env.PATH = env.PATH ? env.PATH + path.delimiter + extra : extra;
+  }
+  return env;
+}
+
+function findDockerBin() {
+  if (os.platform() !== 'win32') return 'docker';
+  // Prefer absolute path if available
+  const candidates = [
+    'C\\\:\\\Program Files\\\Docker\\\Docker\\\resources\\\bin\\\docker.exe',
+    'C\\\:\\\ProgramData\\\DockerDesktop\\\version-bin\\\docker.exe',
+    'docker',
+  ];
+  for (const c of candidates) {
+    try {
+      if (c === 'docker') return c;
+      if (fs.existsSync(c.replace(/\\\\/g, '\\'))) return c.replace(/\\\\/g, '\\');
+    } catch {}
+  }
+  return 'docker';
+}
+
+function run(cmd, args = [], opts = {}) {
+  return new Promise((resolve) => {
+    const p = spawn(cmd, args, { shell: true, env: getEnvWithPath(), ...opts });
+    let out = '';
+    let err = '';
+    p.stdout.on('data', (d) => (out += d.toString()));
+    p.stderr.on('data', (d) => (err += d.toString()));
+    p.on('close', (code) => resolve({ code, out: out.trim(), err: err.trim() }));
+  });
+}
+
+async function detectComposeCmd() {
+  // Try docker-compose v1
+  let r = await run('docker-compose', ['--version']);
+  if (r.code === 0) return { bin: 'docker-compose', args: [] , version: r.out };
+  // Try docker compose v2
+  const dockerBin = findDockerBin();
+  r = await run(dockerBin, ['compose', 'version']);
+  if (r.code === 0) return { bin: 'docker', args: ['compose'], version: r.out };
+  return { bin: null, args: [], version: null };
+}
+
+async function getDockerVersion() {
+  const dockerBin = findDockerBin();
+  let r = await run(dockerBin, ['--version']);
+  if (r.code !== 0 && os.platform() === 'win32') {
+    // Try absolute paths directly if PATH resolution failed
+    const abs = findDockerBin();
+    r = await run(abs, ['--version']);
+  }
+  return r.code === 0 ? r.out : null;
+}
+
+async function getContainerState(name) {
+  // Cross-platform: parse full JSON to avoid quoting issues with -f
+  const r = await run('docker', ['inspect', name]);
+  if (r.code !== 0) return 'not found';
+  try {
+    const arr = JSON.parse(r.out);
+    if (!Array.isArray(arr) || !arr.length) return 'not found';
+    const st = arr[0]?.State || {};
+    const status = st.Status || '';
+    const health = st.Health?.Status || '';
+    return `${status}|${health}`;
+  } catch (e) {
+    return r.out || 'unknown';
+  }
+}
+
+async function getStatus() {
+  const dockerVersion = await getDockerVersion();
+  const compose = await detectComposeCmd();
+  const repoDir = resolveRepoDir();
+  const wanted = ['frigate', 'frigate_listener', 'frigate_proxy', 'mosquitto'];
+  const entries = await Promise.all(
+    wanted.map(async (w) => [w, await getContainerState(w)])
+  );
+  const services = Object.fromEntries(entries);
+  return {
+    platform: os.platform(),
+    repoDir,
+    docker: {
+      installed: !!dockerVersion,
+      version: dockerVersion,
+    },
+    compose: {
+      installed: !!compose.bin,
+      bin: compose.bin,
+      baseArgs: compose.args,
+      version: compose.version,
+    },
+    services,
+  };
+}
+
+async function startDocker() {
+  const platform = os.platform();
+  if (platform === 'darwin') {
+    // macOS: launch Docker Desktop
+    const r = await run('/usr/bin/open', ['-a', 'Docker']);
+    return r.code === 0;
+  }
+  if (platform === 'win32') {
+    // Windows: try to start Docker Desktop
+    // 1) Try PowerShell
+    let r = await run('powershell', ['-Command', 'Start-Process "Docker Desktop"'], { windowsHide: true });
+    if (r.code === 0) return true;
+    // 2) Try default path
+    r = await run('cmd', ['/c', 'start', '""', '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"'], { windowsHide: true });
+    return r.code === 0;
+  }
+  // Linux: best-effort
+  let r = await run('systemctl', ['start', 'docker']);
+  if (r.code === 0) return true;
+  r = await run('sudo', ['-n', 'systemctl', 'start', 'docker']);
+  return r.code === 0;
+}
+
+async function installDockerMac() {
+  const platform = os.platform();
+  if (platform !== 'darwin') {
+    throw new Error('Instalación automática de Docker soportada solo en macOS');
+  }
+  const repoDir = resolveRepoDir();
+  const dmgPath = path.join(repoDir, 'mac', 'Docker.dmg');
+  if (!exists(dmgPath)) {
+    throw new Error(`No se encontró Docker.dmg en: ${dmgPath}`);
+  }
+  // AppleScript con privilegios de administrador, usando archivo temporal para evitar errores de quoting
+  const tmpScript = path.join(os.tmpdir(), `vidria_install_docker_${Date.now()}.applescript`);
+  const asContent = `set dmgPath to "${dmgPath.replace(/"/g, '\"')}"
+do shell script "/usr/bin/hdiutil attach " & quoted form of dmgPath with administrator privileges
+do shell script "/Volumes/Docker/Docker.app/Contents/MacOS/install --accept-license" with administrator privileges
+do shell script "/usr/bin/hdiutil detach /Volumes/Docker" with administrator privileges
+`;
+  fs.writeFileSync(tmpScript, asContent, 'utf8');
+  const r = await run('osascript', [tmpScript], { shell: false });
+  try { fs.unlinkSync(tmpScript); } catch {}
+  if (r.code !== 0) throw new Error(r.err || r.out || 'Fallo instalando Docker');
+  // Intentar abrir Docker inmediatamente tras instalar
+  await run('/usr/bin/open', ['-a', 'Docker'], { shell: false });
+  return true;
+}
+
+async function installDockerWin() {
+  const repoDir = resolveRepoDir();
+  const installer = path.join(repoDir, 'windows', 'Docker Desktop Installer.exe');
+  if (!exists(installer)) {
+    throw new Error(`No se encontró el instalador en: ${installer}`);
+  }
+  const exeEsc = installer.replace(/"/g, '\\"');
+  const ps = `Start-Process -FilePath \"${exeEsc}\" -ArgumentList 'install --accept-license --always-run-service' -Verb RunAs -Wait`;
+  const r = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-Command', ps], { windowsHide: true });
+  if (r.code !== 0) throw new Error(r.err || r.out || 'Fallo instalando Docker en Windows');
+  // Intentar abrir Docker Desktop
+  let r2 = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Start-Process "Docker Desktop"'], { windowsHide: true });
+  if (r2.code !== 0) {
+    await run('cmd', ['/c', 'start', '""', '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"'], { windowsHide: true });
+  }
+  return true;
+}
+
+async function installDocker() {
+  const platform = os.platform();
+  if (platform === 'darwin') return installDockerMac();
+  if (platform === 'win32') return installDockerWin();
+  throw new Error('Instalación automática solo soportada en macOS y Windows');
+}
+
+
+function exists(p) {
+  try { return require('fs').existsSync(p); } catch { return false; }
+}
+
+function resolveRepoDir() {
+  if (process.env.VIDRIA_REPO_DIR && exists(path.join(process.env.VIDRIA_REPO_DIR, 'docker-compose.client.yml'))) {
+    return process.env.VIDRIA_REPO_DIR;
+  }
+  // Assumption: if VIDRIA_REPO_DIR is not set, the app is placed at the repo root
+  // so docker-compose.client.yml should live directly in __dirname
+  if (exists(path.join(__dirname, 'docker-compose.client.yml'))) {
+    return __dirname;
+  }
+  // Fallback: walk up to find it (useful in dev when running from electron-health/)
+  for (let i = 1; i <= 6; i++) {
+    const candidate = path.resolve(__dirname, ...Array(i).fill('..'), 'docker-compose.client.yml');
+    if (exists(candidate)) return path.dirname(candidate);
+  }
+  // Final fallback to __dirname
+  return __dirname;
+}
+
+async function runComposeUp() {
+  const compose = await detectComposeCmd();
+  if (!compose.bin) {
+    throw new Error('docker-compose no encontrado. Instala Docker Compose v1 o v2.');
+  }
+  const repoDir = resolveRepoDir();
+  const args = [...compose.args, '-f', 'docker-compose.client.yml', 'up', '-d'];
+  const r = await run(compose.bin, args, { cwd: repoDir });
+  if (r.code !== 0) throw new Error(r.err || 'Error al ejecutar docker-compose');
+  return r.out || 'ok';
+}
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 900,
+    height: 700,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+  win.loadFile(path.join(__dirname, 'index.html'));
+}
+
+app.whenReady().then(() => {
+  ipcMain.handle('health:getStatus', async () => {
+    try { return await getStatus(); } catch (e) { return { error: String(e) }; }
+  });
+  ipcMain.handle('health:startDocker', async () => {
+    try { return await startDocker(); } catch { return false; }
+  });
+  ipcMain.handle('health:composeUp', async () => {
+    try { return await runComposeUp(); } catch (e) { return String(e); }
+  });
+  ipcMain.handle('health:installDocker', async () => {
+    try { return await installDocker(); } catch (e) { return String(e); }
+  });
+  createWindow();
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
