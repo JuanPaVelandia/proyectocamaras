@@ -38,11 +38,31 @@ export function convertUTCToLocal(utcTime, timezone) {
         const localHours = parts.find(p => p.type === 'hour').value;
         const localMinutes = parts.find(p => p.type === 'minute').value;
         
-        return `${localHours}:${localMinutes}`;
+        const result = `${localHours}:${localMinutes}`;
+        console.log(`[convertUTCToLocal] ${utcTime} (UTC) → ${result} (${timezone})`);
+        
+        return result;
     } catch (error) {
         console.error('Error converting UTC to local:', error);
         return utcTime;
     }
+}
+
+/**
+ * Obtiene el offset en minutos del timezone especificado para una fecha dada
+ * @param {string} timezone - Timezone (ej: "America/Bogota")
+ * @param {Date} date - Fecha para calcular el offset (puede variar por DST)
+ * @returns {number} Offset en minutos (positivo si el timezone está detrás de UTC)
+ */
+function getTimezoneOffsetMinutes(timezone, date = new Date()) {
+    // Método más confiable: usar Intl.DateTimeFormat para obtener el offset
+    const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+    
+    // La diferencia es cuántos minutos hay entre UTC y el timezone
+    // Si el timezone está detrás de UTC (ej: UTC-5), el offset será positivo
+    const diffMs = utcDate.getTime() - tzDate.getTime();
+    return diffMs / (1000 * 60);
 }
 
 /**
@@ -73,52 +93,24 @@ export function convertLocalToUTC(localTime, timezone) {
         const tzMonth = parseInt(tzDateParts.find(p => p.type === 'month').value) - 1;
         const tzDay = parseInt(tzDateParts.find(p => p.type === 'day').value);
         
-        // Crear una fecha que represente la hora local en el timezone del usuario
-        // Usamos un truco: crear la fecha como si fuera UTC, luego la interpretamos en el timezone
+        // Crear una fecha que represente "hoy a las X horas" en el timezone del usuario
+        // Para esto, creamos una fecha ISO string y la interpretamos
         const dateStr = `${tzYear}-${String(tzMonth + 1).padStart(2, '0')}-${String(tzDay).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
         
-        // Crear fecha interpretándola como si fuera en el timezone del usuario
-        // Para esto, usamos el offset del timezone
-        const testDate = new Date();
-        const utcNow = Date.UTC(
-            testDate.getUTCFullYear(),
-            testDate.getUTCMonth(),
-            testDate.getUTCDate(),
-            testDate.getUTCHours(),
-            testDate.getUTCMinutes()
-        );
+        // Crear una fecha que represente esta hora en el timezone del usuario
+        // Usamos un método indirecto: crear una fecha de referencia y calcular el offset
+        const referenceDate = new Date(dateStr + 'Z'); // Interpretar como UTC primero
+        const offsetMinutes = getTimezoneOffsetMinutes(timezone, referenceDate);
         
-        const tzNowStr = testDate.toLocaleString('en-US', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
-        
-        const [tzDatePart, tzTimePart] = tzNowStr.split(', ');
-        const [tzMonthStr, tzDayStr, tzYearStr] = tzDatePart.split('/');
-        const [tzHour, tzMinute] = tzTimePart.split(':').map(Number);
-        
-        const tzNow = Date.UTC(
-            parseInt(tzYearStr),
-            parseInt(tzMonthStr) - 1,
-            parseInt(tzDayStr),
-            tzHour,
-            tzMinute
-        );
-        
-        const offset = utcNow - tzNow; // Offset en milisegundos
-        
-        // Crear la fecha local como UTC y ajustar por el offset
-        const localAsUTC = Date.UTC(tzYear, tzMonth, tzDay, hours, minutes);
-        const utcTime = localAsUTC - offset;
-        
+        // Ajustar: si el timezone está UTC-5, el offset es +300 minutos
+        // Para convertir de local a UTC, sumamos el offset
+        const utcTime = referenceDate.getTime() + (offsetMinutes * 60 * 1000);
         const utcDate = new Date(utcTime);
+        
         const utcHours = String(utcDate.getUTCHours()).padStart(2, '0');
         const utcMinutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
+        
+        console.log(`[convertLocalToUTC] ${localTime} (${timezone}) → ${utcHours}:${utcMinutes} (UTC) - offset: ${offsetMinutes} min`);
         
         return `${utcHours}:${utcMinutes}`;
     } catch (error) {
