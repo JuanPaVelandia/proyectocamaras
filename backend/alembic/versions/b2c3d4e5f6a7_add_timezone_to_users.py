@@ -20,13 +20,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add timezone column to users table"""
-    # Agregar columna timezone con valor por defecto
-    # Si ya existe, PostgreSQL lanzará un error que ignoraremos
-    try:
+    # Verificar si la columna ya existe antes de agregarla
+    from sqlalchemy import inspect
+    from sqlalchemy.engine import reflection
+    
+    bind = op.get_bind()
+    inspector = reflection.Inspector.from_engine(bind)
+    columns = [col['name'] for col in inspector.get_columns('users')]
+    
+    if 'timezone' not in columns:
         op.add_column('users', sa.Column('timezone', sa.String(length=50), server_default='UTC', nullable=True))
-    except Exception:
-        # Si la columna ya existe, no hacer nada
-        pass
 
 
 def downgrade() -> None:
