@@ -8,13 +8,44 @@ from app.db.session import SessionLocal
 from app.models.all_models import UserDB
 from app.core.security import create_access_token, verify_token, hash_password, verify_password
 from app.utils.timezone_utils import get_timezone_from_phone
+
 router = APIRouter()
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> UserDB:
+    """Dependency para obtener el usuario actual desde el token JWT"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(status_code=401, detail="Invalid Authorization scheme")
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+    
+    user = db.query(UserDB).filter(UserDB.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    return user
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -87,23 +118,12 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # Crear token automáticamente
     token = create_access_token(data={"user_id": new_user.id, "username": new_user.username})
     
-    if not x_admin_token:
-        raise HTTPException(status_code=401, detail="Missing X-Admin-Token header")
-
-    # Verificar JWT
-    payload = verify_token(x_admin_token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-
-    user = db.query(UserDB).get(user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return user
+    return {
+        "token": token,
+        "username": new_user.username,
+        "email": new_user.email,
+        "whatsapp_number": new_user.whatsapp_number
+    }
 
 @router.get("/me")
 def get_user_info(current_user: UserDB = Depends(get_current_user)):
@@ -199,6 +219,11 @@ def update_user_profile(
             "whatsapp_notifications_enabled": current_user.whatsapp_notifications_enabled
         }
     }
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
     @validator('new_password')
     def validate_new_password(cls, v):
         if len(v) < 8:
