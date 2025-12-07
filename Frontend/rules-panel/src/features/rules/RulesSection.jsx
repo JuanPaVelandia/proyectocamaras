@@ -5,6 +5,7 @@ import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { useToast } from "../../context/ToastContext";
+import { convertUTCToLocal, convertLocalToUTC, getUserTimezone } from "../../utils/timezone";
 
 export function RulesSection() {
     const [rules, setRules] = useState([]);
@@ -14,6 +15,7 @@ export function RulesSection() {
     const [objects, setObjects] = useState([]);
     const [loadingOptions, setLoadingOptions] = useState(true);
     const [objectSearch, setObjectSearch] = useState("");
+    const [userTimezone, setUserTimezone] = useState("UTC");
     const { addToast } = useToast();
 
     const [form, setForm] = useState({
@@ -35,7 +37,13 @@ export function RulesSection() {
         setLoading(true);
         try {
             const res = await api.get("/api/rules");
-            setRules(res.data.rules);
+            // Convertir horarios de UTC a hora local para mostrar
+            const rulesWithLocalTime = res.data.rules.map(rule => ({
+                ...rule,
+                time_start: rule.time_start ? convertUTCToLocal(rule.time_start, userTimezone) : null,
+                time_end: rule.time_end ? convertUTCToLocal(rule.time_end, userTimezone) : null,
+            }));
+            setRules(rulesWithLocalTime);
         } catch (err) {
             console.error(err);
             addToast("Error cargando reglas", "error");
@@ -45,9 +53,15 @@ export function RulesSection() {
     };
 
     useEffect(() => {
+        loadUserTimezone();
         loadRules();
         loadFrigateOptions();
     }, []);
+
+    const loadUserTimezone = async () => {
+        const tz = await getUserTimezone();
+        setUserTimezone(tz);
+    };
 
     const loadFrigateOptions = async () => {
         setLoadingOptions(true);
@@ -135,6 +149,10 @@ export function RulesSection() {
             return;
         }
         try {
+            // Convertir horarios de hora local a UTC antes de enviar
+            const localTimeStart = formatTime(form.time_start_hour, form.time_start_minute);
+            const localTimeEnd = formatTime(form.time_end_hour, form.time_end_minute);
+            
             const payload = {
                 name: form.name,
                 camera: form.camera || null,
@@ -143,8 +161,8 @@ export function RulesSection() {
                 min_score: form.min_score ? parseFloat(form.min_score.toString().replace(',', '.')) : null,
                 min_duration_seconds: form.min_duration_seconds ? parseFloat(form.min_duration_seconds.toString().replace(',', '.')) : null,
                 custom_message: form.custom_message || null,
-                time_start: formatTime(form.time_start_hour, form.time_start_minute),
-                time_end: formatTime(form.time_end_hour, form.time_end_minute),
+                time_start: localTimeStart ? convertLocalToUTC(localTimeStart, userTimezone) : null,
+                time_end: localTimeEnd ? convertLocalToUTC(localTimeEnd, userTimezone) : null,
                 enabled: form.enabled,
             };
             await api.post("/api/rules", payload);
@@ -185,6 +203,10 @@ export function RulesSection() {
             return;
         }
         try {
+            // Convertir horarios de hora local a UTC antes de enviar
+            const localTimeStart = formatTime(form.time_start_hour, form.time_start_minute);
+            const localTimeEnd = formatTime(form.time_end_hour, form.time_end_minute);
+            
             const payload = {
                 name: form.name,
                 camera: form.camera || null,
@@ -193,8 +215,8 @@ export function RulesSection() {
                 min_score: form.min_score ? parseFloat(form.min_score.toString().replace(',', '.')) : null,
                 min_duration_seconds: form.min_duration_seconds ? parseFloat(form.min_duration_seconds.toString().replace(',', '.')) : null,
                 custom_message: form.custom_message || null,
-                time_start: formatTime(form.time_start_hour, form.time_start_minute),
-                time_end: formatTime(form.time_end_hour, form.time_end_minute),
+                time_start: localTimeStart ? convertLocalToUTC(localTimeStart, userTimezone) : null,
+                time_end: localTimeEnd ? convertLocalToUTC(localTimeEnd, userTimezone) : null,
                 enabled: form.enabled,
             };
             await api.patch(`/api/rules/${editingRuleId}`, payload);

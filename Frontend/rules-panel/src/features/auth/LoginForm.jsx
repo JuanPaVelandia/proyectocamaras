@@ -51,28 +51,32 @@ export function LoginForm({ onLoginSuccess, onBackToLanding, onNavigateToRegiste
             });
 
             console.log("✅ Respuesta recibida:", res.data);
+            localStorage.setItem("adminToken", res.data.token);
+
+            // Obtener información completa del usuario incluyendo timezone
+            let userData = {
+                username: res.data.username,
+                email: res.data.email,
+                whatsapp_number: res.data.whatsapp_number,
+                timezone: res.data.timezone || "UTC"
+            };
             
-            // El backend retorna { access_token, user: { username, email, ... } }
-            const token = res.data.access_token || res.data.token;
-            const user = res.data.user || res.data;
-            
-            if (!token) {
-                throw new Error("No se recibió token del servidor");
+            // Si no viene en la respuesta, obtener del endpoint /me
+            if (!res.data.timezone) {
+                try {
+                    const meRes = await api.get("/api/auth/me");
+                    userData.timezone = meRes.data.timezone || "UTC";
+                } catch (e) {
+                    console.warn("No se pudo obtener timezone:", e);
+                }
             }
             
-            localStorage.setItem("adminToken", token);
-
-            const userData = {
-                username: user.username || "",
-                email: user.email || "",
-                whatsapp_number: user.whatsapp_number || ""
-            };
             localStorage.setItem("userData", JSON.stringify(userData));
 
-            addToast(`Bienvenido, ${user.username || "Usuario"}!`, "success");
+            addToast(`Bienvenido, ${res.data.username}!`, "success");
 
             setTimeout(() => {
-                onLoginSuccess(token);
+                onLoginSuccess(res.data.token);
             }, 500);
         } catch (err) {
             console.error("❌ Error en login:", err);
