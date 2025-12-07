@@ -49,6 +49,36 @@ def get_current_user(
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+@router.post("/login")
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    """Autentica un usuario y retorna un token JWT"""
+    
+    # Buscar usuario por username
+    user = db.query(UserDB).filter(UserDB.username == req.username.lower()).first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    
+    # Verificar contraseña
+    if not user.password_hash:
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    
+    # Crear token
+    token = create_access_token(data={"user_id": user.id, "username": user.username})
+    
+    logging.info(f"✅ Usuario autenticado: {user.username}")
+    
+    return {
+        "token": token,
+        "username": user.username,
+        "email": user.email,
+        "whatsapp_number": user.whatsapp_number
+    }
+
 class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
