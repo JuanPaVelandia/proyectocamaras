@@ -19,20 +19,36 @@ def get_db():
         db.close()
 
 def get_current_user(
-    authorization: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
     db: Session = Depends(get_db)
 ) -> UserDB:
-    """Dependency para obtener el usuario actual desde el token JWT"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    """Dependency para obtener el usuario actual desde el token JWT
     
-    try:
-        scheme, token = authorization.split()
-        if scheme.lower() != "bearer":
-            raise HTTPException(status_code=401, detail="Invalid Authorization scheme")
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    Acepta el token en dos formatos:
+    1. Authorization: Bearer <token> (estándar HTTP)
+    2. X-Admin-Token: <token> (compatibilidad con frontend)
+    """
+    token = None
     
+    # Intentar obtener token de Authorization header (estándar)
+    if authorization:
+        try:
+            scheme, token = authorization.split()
+            if scheme.lower() != "bearer":
+                raise HTTPException(status_code=401, detail="Invalid Authorization scheme")
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    
+    # Si no hay Authorization, intentar X-Admin-Token (compatibilidad)
+    if not token and x_admin_token:
+        token = x_admin_token
+    
+    # Si no hay token en ningún header, error
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing Authorization header or X-Admin-Token")
+    
+    # Verificar token
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

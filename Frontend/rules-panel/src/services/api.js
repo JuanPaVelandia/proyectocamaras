@@ -42,12 +42,6 @@ export function getApiBase() {
   return getApiBaseUrl();
 }
 
-// Función para obtener el baseURL correcto (siempre HTTPS en producción)
-function getCorrectBaseURL() {
-  // Usar la misma lógica que getApiBaseUrl para asegurar consistencia
-  return getApiBaseUrl();
-}
-
 // Log para debug
 if (typeof window !== 'undefined') {
   console.log('🔗 URL del API configurada:', API_BASE);
@@ -78,6 +72,12 @@ if (typeof window !== 'undefined' && isDevelopment) {
     protocol: window.location.protocol,
     isDevelopment
   });
+}
+
+// Función para obtener el baseURL correcto (siempre HTTPS en producción)
+function getCorrectBaseURL() {
+  // Usar la misma lógica que getApiBaseUrl para asegurar consistencia
+  return getApiBaseUrl();
 }
 
 // Función para construir la URL completa con HTTPS garantizado
@@ -138,6 +138,9 @@ api.interceptors.request.use((config) => {
   
   const token = localStorage.getItem("adminToken");
   if (token) {
+    // Usar formato estándar Authorization Bearer
+    config.headers["Authorization"] = `Bearer ${token}`;
+    // También mantener X-Admin-Token para compatibilidad
     config.headers["X-Admin-Token"] = token;
   }
   
