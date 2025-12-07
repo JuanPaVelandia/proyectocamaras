@@ -20,16 +20,9 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
         # --- PASO 1: IDENTIFICACIÓN DEL DUEÑO (SEGURIDAD) ---
         customer_id = event_body.get("customer_id")
         
-        logging.info(f"🔍 Rule Engine - Procesando evento {event_db_id}")
-        logging.info(f"   - Customer ID recibido: {customer_id}")
-        logging.info(f"   - Cámara: {event_body.get('camera')}")
-        logging.info(f"   - Label: {event_body.get('label')}")
-        logging.info(f"   - Tipo: {event_body.get('frigate_type')}")
-        
         # Validación: Si el evento no tiene dueño, es peligroso procesarlo.
         if not customer_id:
             logging.warning(f"⚠️ Evento {event_db_id} rechazado: Falta 'customer_id'.")
-            logging.warning(f"   Campos disponibles en el evento: {list(event_body.keys())}")
             return
 
         # Buscamos al usuario dueño en la base de datos
@@ -37,10 +30,7 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
         
         if not owner_user:
             logging.warning(f"⚠️ Evento rechazado: El usuario '{customer_id}' no existe en la BD.")
-            logging.warning(f"   Verifica que el CUSTOMER_ID en el listener coincida con un username en la BD")
             return
-        
-        logging.info(f"✅ Usuario encontrado: {owner_user.username} (ID: {owner_user.id})")
 
         # Validar si el usuario pagó (El "Interruptor")
         # if not owner_user.is_active: 
@@ -115,7 +105,7 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
             # E. Validación de Horario
             if rule.time_start or rule.time_end:
                 try:
-                    now_time = datetime.now().time() # OJO: Asegurar zona horaria correcta en el futuro
+                    now_time = datetime.utcnow().time()  # Usar UTC explícitamente para comparar con reglas guardadas en UTC
                     t_start = datetime.strptime(rule.time_start, "%H:%M").time() if rule.time_start else None
                     t_end = datetime.strptime(rule.time_end, "%H:%M").time() if rule.time_end else None
                     
@@ -152,23 +142,13 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                 logging.info(f"🔕 Usuario {owner_user.username} tiene notificaciones apagadas o sin número.")
                 continue
 
-            # Construir mensaje - Usar custom_message si existe, sino usar template por defecto
-            if rule.custom_message:
-                # Usar mensaje personalizado de la regla
-                # Reemplazar variables en el template: {camera}, {label}, {score}, {confidence}
-                msg = rule.custom_message
-                msg = msg.replace("{camera}", camera_name or "N/A")
-                msg = msg.replace("{label}", label or "N/A")
-                msg = msg.replace("{score}", str(final_score))
-                msg = msg.replace("{confidence}", f"{int(final_score * 100)}%")
-            else:
-                # Mensaje por defecto
-                msg = (
-                    f"🔔 *Alerta Vidria*\n"
-                    f"📹 Cámara: {camera_name}\n"
-                    f"🔍 Objeto: {label}\n"
-                    f"📊 Confianza: {int(final_score * 100)}%"
-                )
+            # Construir mensaje (Aquí luego implementaremos Templates)
+            msg = (
+                f"🔔 *Alerta Vidria*\n"
+                f"📹 Cámara: {camera_name}\n"
+                f"🔍 Objeto: {label}\n"
+                f"📊 Confianza: {int(final_score * 100)}%"
+            )
 
             # Carga LAZY de la imagen (Solo si vamos a enviar)
             snapshot_b64 = None
