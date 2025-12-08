@@ -33,15 +33,17 @@ export function RulesSection() {
         enabled: true,
     });
 
-    const loadRules = async () => {
+    const loadRules = async (timezone = null) => {
         setLoading(true);
         try {
             const res = await api.get("/api/rules");
+            // Usar el timezone proporcionado o el del estado
+            const tz = timezone || userTimezone;
             // Convertir horarios de UTC a hora local para mostrar
             const rulesWithLocalTime = res.data.rules.map(rule => ({
                 ...rule,
-                time_start: rule.time_start ? convertUTCToLocal(rule.time_start, userTimezone) : null,
-                time_end: rule.time_end ? convertUTCToLocal(rule.time_end, userTimezone) : null,
+                time_start: rule.time_start ? convertUTCToLocal(rule.time_start, tz) : null,
+                time_end: rule.time_end ? convertUTCToLocal(rule.time_end, tz) : null,
             }));
             setRules(rulesWithLocalTime);
         } catch (err) {
@@ -53,14 +55,18 @@ export function RulesSection() {
     };
 
     useEffect(() => {
-        loadUserTimezone();
-        loadRules();
-        loadFrigateOptions();
+        const initialize = async () => {
+            const tz = await loadUserTimezone();
+            await loadRules(tz); // Pasar el timezone directamente
+            loadFrigateOptions();
+        };
+        initialize();
     }, []);
 
     const loadUserTimezone = async () => {
         const tz = await getUserTimezone();
         setUserTimezone(tz);
+        return tz; // Retornar el timezone para usarlo inmediatamente
     };
 
     const loadFrigateOptions = async () => {
