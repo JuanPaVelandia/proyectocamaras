@@ -1,19 +1,67 @@
 import smtplib
 import logging
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.core.config import settings
 
 def send_email(to_email: str, subject: str, html_content: str):
     """
-    Envía un correo electrónico usando SMTP.
+    Envía un correo electrónico usando Resend API (si está configurado) o SMTP.
     Retorna True si se envió exitosamente, False en caso contrario.
     """
-    if not settings.SMTP_HOST or not settings.SMTP_USER:
-        logging.warning("⚠️ SMTP no configurado. No se envió el correo.")
-        logging.info(f"📧 [SIMULACIÓN] Para: {to_email} | Asunto: {subject}")
+    # Intentar usar Resend primero (más confiable)
+    if settings.RESEND_API_KEY:
+        return _send_email_resend(to_email, subject, html_content)
+    
+    # Fallback a SMTP
+    if settings.SMTP_HOST and settings.SMTP_USER:
+        return _send_email_smtp(to_email, subject, html_content)
+    
+    # No hay configuración de correo
+    logging.warning("⚠️ No hay servicio de correo configurado (ni Resend ni SMTP).")
+    logging.info(f"📧 [SIMULACIÓN] Para: {to_email} | Asunto: {subject}")
+    return False
+
+def _send_email_resend(to_email: str, subject: str, html_content: str) -> bool:
+    """
+    Envía un correo usando la API de Resend.
+    """
+    try:
+        url = "https://api.resend.com/emails"
+        headers = {
+            "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "from": f"{settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content
+        }
+        
+        response = requests.post(url, json=data, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        logging.info(f"✅ Correo enviado a {to_email} usando Resend")
+        return True
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Error enviando correo con Resend: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_detail = e.response.json()
+                logging.error(f"   Detalles de Resend: {error_detail}")
+            except:
+                logging.error(f"   Respuesta: {e.response.text}")
+        return False
+    except Exception as e:
+        logging.error(f"❌ Error inesperado con Resend: {e}")
         return False
 
+def _send_email_smtp(to_email: str, subject: str, html_content: str) -> bool:
+    """
+    Envía un correo usando SMTP.
+    """
     try:
         msg = MIMEMultipart()
         msg["From"] = f"{settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>"
@@ -32,10 +80,10 @@ def send_email(to_email: str, subject: str, html_content: str):
         server.send_message(msg)
         server.quit()
         
-        logging.info(f"✅ Correo enviado a {to_email}")
+        logging.info(f"✅ Correo enviado a {to_email} usando SMTP")
         return True
     except Exception as e:
-        logging.error(f"❌ Error enviando correo: {e}")
+        logging.error(f"❌ Error enviando correo con SMTP: {e}")
         logging.error(f"   Detalles: SMTP_HOST={settings.SMTP_HOST}, SMTP_PORT={settings.SMTP_PORT}, SMTP_USER={settings.SMTP_USER[:3] if settings.SMTP_USER else 'None'}***")
         return False
 

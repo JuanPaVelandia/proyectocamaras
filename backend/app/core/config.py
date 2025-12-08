@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     # EMAIL
+    # Resend API (preferido si está configurado)
+    RESEND_API_KEY: Optional[str] = None
+    
+    # SMTP (alternativa)
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
