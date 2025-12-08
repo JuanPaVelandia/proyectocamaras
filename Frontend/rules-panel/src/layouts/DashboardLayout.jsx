@@ -20,18 +20,25 @@ export function DashboardLayout({ children, onLogout, onNavigateToProfile, onNav
                 }}
             >
                 <div
-                    style={{ flex: "1 1 auto", minWidth: "200px", cursor: "pointer" }}
-                    onClick={onNavigateToLanding}
-                    title="Volver al inicio"
+                    style={{ flex: "1 1 auto", minWidth: "200px" }}
                 >
-                    <h1 style={{
-                        margin: 0,
-                        fontSize: "clamp(20px, 3.5vw, 28px)",
-                        fontWeight: 700,
-                        color: "#0f172a",
-                        letterSpacing: "-0.02em",
-                        lineHeight: 1.2,
-                    }}>
+                    <h1 
+                        style={{
+                            margin: 0,
+                            fontSize: "clamp(20px, 3.5vw, 28px)",
+                            fontWeight: 700,
+                            color: "#0f172a",
+                            letterSpacing: "-0.02em",
+                            lineHeight: 1.2,
+                            cursor: "pointer",
+                            display: "inline-block",
+                            transition: "opacity 0.2s ease",
+                        }}
+                        onClick={onNavigateToLanding}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = "0.7"}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+                        title="Volver al inicio"
+                    >
                         🎥 Control de Vidria
                     </h1>
                     <p style={{

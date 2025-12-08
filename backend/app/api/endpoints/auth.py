@@ -1,13 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from pydantic import BaseModel, EmailStr, validator
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import timedelta
 import logging
 import re
 from app.db.session import SessionLocal
 from app.models.all_models import UserDB
 from app.core.security import create_access_token, verify_token, hash_password, verify_password
 from app.utils.timezone_utils import get_timezone_from_phone
+from app.utils.email_utils import send_reset_password_email
 
 router = APIRouter()
 
@@ -266,6 +268,47 @@ def update_user_profile(
         }
     }
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+@router.post("/forgot-password")
+def forgot_password(
+    req: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Envía un correo con un enlace para recuperar la contraseña"""
+    
+    # Buscar usuario por email
+    user = db.query(UserDB).filter(UserDB.email == req.email).first()
+    
+    # Por seguridad, no revelamos si el email existe o no
+    # Siempre respondemos igual
+    if not user:
+        logging.info(f"⚠️ Intento de recuperación de contraseña para email no registrado: {req.email}")
+        return {"message": "Si el correo existe, recibirás instrucciones pronto"}
+    
+    # Verificar que el usuario tenga contraseña (no es usuario OAuth sin contraseña)
+    if not user.password_hash:
+        logging.info(f"⚠️ Intento de recuperación de contraseña para usuario OAuth: {req.email}")
+        return {"message": "Si el correo existe, recibirás instrucciones pronto"}
+    
+    # Crear token de recuperación con expiración de 15 minutos
+    reset_token = create_access_token(
+        data={
+            "user_id": user.id,
+            "type": "reset"
+        },
+        expires_delta=timedelta(minutes=15)
+    )
+    
+    # Enviar correo en background
+    background_tasks.add_task(send_reset_password_email, user.email, reset_token)
+    
+    logging.info(f"📧 Enlace de recuperación enviado a: {user.email}")
+    
+    return {"message": "Si el correo existe, recibirás instrucciones pronto"}
+
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
@@ -293,7 +336,10 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Token inválido para restablecimiento")
         
     user_id = payload.get("user_id")
-    user = db.query(UserDB).get(user_id)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Token inválido: falta user_id")
+    
+    user = db.query(UserDB).filter(UserDB.id == user_id).first()
     
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
