@@ -47,20 +47,25 @@ async def receive_event(
 
     body = await request.json()
 
-    # Mejorar logging para debugging
-    frigate_type = body.get('frigate_type') or body.get('type')
-    customer_id = body.get('customer_id')
-    camera = body.get('camera')
-    label = body.get('label')
-    
-    logging.info(f"📨 Evento recibido en backend:")
-    logging.info(f"   - Tipo: {frigate_type}")
-    logging.info(f"   - Customer ID: {customer_id}")
-    logging.info(f"   - Cámara: {camera}")
-    logging.info(f"   - Label: {label}")
-    
-    if not customer_id:
-        logging.warning(f"⚠️ Evento recibido SIN customer_id - será rechazado por el rule engine")
+    # TEMPORAL: Validación deshabilitada para testing
+    # TODO: Reactivar después de las pruebas
+    # from app.models.all_models import CameraDB
+    # camera_name = body.get("camera")
+    #
+    # db_check = SessionLocal()
+    # try:
+    #     camera = db_check.query(CameraDB).filter(
+    #         CameraDB.name == camera_name,
+    #         CameraDB.enabled == True
+    #     ).first()
+    #
+    #     if not camera:
+    #         logging.warning(f"🚫 Evento ignorado: Cámara '{camera_name}' no existe en la base de datos o está deshabilitada.")
+    #         return {"status": "ignored", "reason": "camera_not_in_database"}
+    # finally:
+    #     db_check.close()
+
+    logging.info(f"📨 Evento recibido en backend: {body.get('type')} - {body.get('label')}")
 
     now = datetime.utcnow()
 
@@ -80,8 +85,7 @@ async def receive_event(
 
     # DB FIX: Only save 'end' events to DB (PostgreSQL)
     # 'new' and 'update' are kept in RAM only for live view
-    event_type = body.get('frigate_type') or body.get('type')
-    if event_type == 'end':
+    if body.get('type') == 'end':
         db = SessionLocal()
         try:
             db_event = EventDB(
@@ -105,7 +109,7 @@ async def receive_event(
         # For 'new'/'update', we don't save to DB and don't trigger rules (no DB ID)
         pass
 
-    return {"status": "ok", "stored": event_type == 'end'}
+    return {"status": "ok", "stored": body.get('type') == 'end'}
 
 
 @router.get("/")

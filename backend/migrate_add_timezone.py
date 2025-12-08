@@ -105,3 +105,4 @@ if __name__ == "__main__":
         print(f"\n❌ Error en la migración: {e}")
         sys.exit(1)
 
+
