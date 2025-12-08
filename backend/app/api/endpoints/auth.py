@@ -302,10 +302,10 @@ def forgot_password(
         expires_delta=timedelta(minutes=15)
     )
     
-    # Enviar correo en background
+    # Enviar correo en background (si falla, se mostrará el link en los logs)
     background_tasks.add_task(send_reset_password_email, user.email, reset_token)
     
-    logging.info(f"📧 Enlace de recuperación enviado a: {user.email}")
+    logging.info(f"📧 Solicitud de recuperación de contraseña para: {user.email}")
     
     return {"message": "Si el correo existe, recibirás instrucciones pronto"}
 

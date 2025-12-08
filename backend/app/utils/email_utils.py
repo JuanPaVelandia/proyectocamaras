@@ -7,11 +7,12 @@ from app.core.config import settings
 def send_email(to_email: str, subject: str, html_content: str):
     """
     Envía un correo electrónico usando SMTP.
+    Retorna True si se envió exitosamente, False en caso contrario.
     """
     if not settings.SMTP_HOST or not settings.SMTP_USER:
         logging.warning("⚠️ SMTP no configurado. No se envió el correo.")
         logging.info(f"📧 [SIMULACIÓN] Para: {to_email} | Asunto: {subject}")
-        return
+        return False
 
     try:
         msg = MIMEMultipart()
@@ -32,12 +33,16 @@ def send_email(to_email: str, subject: str, html_content: str):
         server.quit()
         
         logging.info(f"✅ Correo enviado a {to_email}")
+        return True
     except Exception as e:
         logging.error(f"❌ Error enviando correo: {e}")
+        logging.error(f"   Detalles: SMTP_HOST={settings.SMTP_HOST}, SMTP_PORT={settings.SMTP_PORT}, SMTP_USER={settings.SMTP_USER[:3] if settings.SMTP_USER else 'None'}***")
+        return False
 
 def send_reset_password_email(to_email: str, token: str):
     """
     Envía el correo de recuperación de contraseña.
+    Retorna True si se envió exitosamente, False en caso contrario.
     """
     reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
     
@@ -63,4 +68,11 @@ def send_reset_password_email(to_email: str, token: str):
     </html>
     """
     
-    send_email(to_email, subject, html_content)
+    success = send_email(to_email, subject, html_content)
+    
+    # Si falló el envío, mostrar el link en los logs para desarrollo/testing
+    if not success:
+        logging.warning(f"⚠️ No se pudo enviar el correo. Link de recuperación para {to_email}:")
+        logging.warning(f"🔗 {reset_link}")
+    
+    return success
