@@ -197,7 +197,16 @@ export function CameraList({ onAddCamera, onEditCamera }) {
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                                         <span>IP/RTSP:</span>
                                         <span style={{ fontFamily: "monospace", color: "#334155" }}>
-                                            {camera.rtsp_url ? new URL(camera.rtsp_url.replace("rtsp://", "http://")).hostname : "N/A"}
+                                            {(() => {
+                                                try {
+                                                    if (!camera.rtsp_url) return "N/A";
+                                                    // Intentar parsear
+                                                    const urlStr = camera.rtsp_url.includes("://") ? camera.rtsp_url : `rtsp://${camera.rtsp_url}`;
+                                                    return new URL(urlStr.replace("rtsp://", "http://")).hostname;
+                                                } catch (e) {
+                                                    return camera.rtsp_url; // Fallback to raw string
+                                                }
+                                            })()}
                                         </span>
                                     </div>
                                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
