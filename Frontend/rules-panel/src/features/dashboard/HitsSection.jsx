@@ -27,7 +27,7 @@ export function HitsSection() {
     }, []);
 
     return (
-        <div style={{ 
+        <div style={{
             animation: "fadeIn 0.5s ease-out",
             width: "100%",
             maxWidth: "100%",
@@ -139,9 +139,9 @@ export function HitsSection() {
                                             gap: 12,
                                             flexWrap: "wrap",
                                         }}>
-                                            {hit.event_data.score && (
+                                            {hit.event_data.top_score && (
                                                 <Badge variant="neutral">
-                                                    Score: {Math.round((hit.event_data.score || 0) * 100)}%
+                                                    Score: {Math.round((hit.event_data.top_score || 0) * 100)}%
                                                 </Badge>
                                             )}
                                             <Badge variant="neutral">

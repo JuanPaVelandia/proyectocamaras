@@ -16,7 +16,7 @@ objects:
   - bicycle
 cameras:
   
-  camara_manare:
+  cam_manare:
     ffmpeg:
       inputs:
       - path: rtsp://admin:BRJQEG@192.168.1.34:554/live

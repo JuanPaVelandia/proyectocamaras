@@ -341,6 +341,7 @@ def normalize_frigate_event(data: dict) -> dict:
         "site_id": SITE_ID,
 
         "event_id": event_id,
+        "type": frigate_type, # Backend expects 'type'
         "frigate_type": frigate_type,
         "camera": camera,
         "label": label,
@@ -525,7 +526,7 @@ def on_message(client, userdata, msg):
         return
 
     logging.info(
-        f"📥 Evento normalizado: camera={normalized_event.get('camera')}, "
+        f"📥 Evento normalizado: customer={CUSTOMER_ID}, camera={normalized_event.get('camera')}, "
         f"label={normalized_event.get('label')}, "
         f"type={normalized_event.get('frigate_type')}, "
         f"id={normalized_event.get('event_id')}"

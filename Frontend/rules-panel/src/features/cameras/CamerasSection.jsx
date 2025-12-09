@@ -4,6 +4,22 @@ import { AddCameraWizard } from "./AddCameraWizard";
 
 export function CamerasSection() {
     const [view, setView] = useState("list"); // "list" | "wizard"
+    const [editingCamera, setEditingCamera] = useState(null);
+
+    const handleAdd = () => {
+        setEditingCamera(null);
+        setView("wizard");
+    };
+
+    const handleEdit = (camera) => {
+        setEditingCamera(camera);
+        setView("wizard");
+    };
+
+    const handleSuccess = () => {
+        setView("list");
+        setEditingCamera(null);
+    };
 
     return (
         <div style={{
@@ -12,11 +28,15 @@ export function CamerasSection() {
             boxSizing: "border-box",
         }}>
             {view === "list" ? (
-                <CameraList onAddCamera={() => setView("wizard")} />
+                <CameraList
+                    onAddCamera={handleAdd}
+                    onEditCamera={handleEdit}
+                />
             ) : (
                 <AddCameraWizard
                     onCancel={() => setView("list")}
-                    onSuccess={() => setView("list")}
+                    onSuccess={handleSuccess}
+                    initialData={editingCamera}
                 />
             )}
         </div>

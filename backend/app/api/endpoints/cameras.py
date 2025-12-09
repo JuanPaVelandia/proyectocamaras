@@ -254,6 +254,96 @@ def add_camera(
         logger.error(f"Error agregando cámara: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.put("/{camera_id}")
+def update_camera(
+    camera_id: int,
+    camera_data: Dict[str, Any],
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Actualiza una cámara existente y su configuración en Frigate"""
+    try:
+        # Verificar que la cámara pertenezca al usuario
+        camera = db.query(CameraDB).filter(
+            CameraDB.id == camera_id,
+            CameraDB.user_id == current_user.id
+        ).first()
+
+        if not camera:
+            raise HTTPException(status_code=404, detail="Cámara no encontrada")
+
+        old_name = camera.name
+        new_name = camera_data.get("name", old_name).strip()
+
+        # Validar nuevo nombre
+        if new_name != old_name:
+            if not new_name:
+                raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
+            if not new_name.replace("_", "").replace("-", "").isalnum():
+                raise HTTPException(status_code=400, detail="Nombre inválido")
+            
+            # Verificar colisión
+            existing = db.query(CameraDB).filter(CameraDB.name == new_name).first()
+            if existing:
+                raise HTTPException(status_code=400, detail=f"Ya existe una cámara con el nombre '{new_name}'")
+
+        # Construir nueva URL RTSP si se proporcionan datos de conexión
+        # Si no se envían datos de conexión, mantenemos la URL actual
+        ip = camera_data.get("ip", "").strip()
+        stream_path = camera_data.get("stream_path", "").strip()
+        
+        new_rtsp_url = camera.rtsp_url
+        if ip and stream_path:
+            port = camera_data.get("port", "554")
+            username = camera_data.get("username", "").strip()
+            password = camera_data.get("password", "").strip()
+            
+            if username and password:
+                new_rtsp_url = f"rtsp://{username}:{password}@{ip}:{port}{stream_path}"
+            else:
+                new_rtsp_url = f"rtsp://{ip}:{port}{stream_path}"
+
+        # Actualizar DB
+        camera.name = new_name
+        camera.description = camera_data.get("description", camera.description)
+        camera.rtsp_url = new_rtsp_url
+        
+        db.commit()
+        db.refresh(camera)
+        
+        logger.info(f"📝 Cámara '{old_name}' actualizada a '{new_name}' por usuario {current_user.username}")
+
+        # Actualizar Frigate
+        # Estrategia: Eliminar entrada anterior y agregar nueva
+        # Esto maneja tanto cambio de nombre como cambio de RTSP
+        frigate_updated = False
+        
+        # Solo tocamos frigate si cambió nombre o RTSP
+        if new_name != old_name or new_rtsp_url != camera.rtsp_url:
+            remove_camera_from_frigate_config(old_name)
+            if new_rtsp_url:
+                 add_camera_to_frigate_config(new_name, new_rtsp_url)
+            
+            restart_frigate()
+            frigate_updated = True
+
+        return {
+            "message": "Cámara actualizada correctamente",
+            "camera": {
+                "id": camera.id,
+                "name": camera.name,
+                "rtsp_url": camera.rtsp_url
+            },
+            "frigate_updated": frigate_updated
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando cámara: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/{camera_id}")
 def delete_camera(
     camera_id: int,

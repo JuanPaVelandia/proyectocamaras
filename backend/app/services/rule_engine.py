@@ -42,11 +42,9 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
         frigate_type = event_body.get("frigate_type")
         duration = event_body.get("duration_seconds")
 
-        # CORRECCIÓN DEL BUG DE SCORE:
-        # Tomamos el mayor entre el score final y el mejor score histórico
-        current_score = float(event_body.get("score") or 0.0)
-        top_score = float(event_body.get("top_score") or 0.0)
-        final_score = max(current_score, top_score)
+        # CORRECCIÓN SOLICITADA: Usar estrictamente top_score para consistencia con frontend
+        # Si el usuario ve top_score en la UI, la regla debe validarse contra eso.
+        final_score = float(event_body.get("top_score") or 0.0)
 
         # --- PASO 3: CONSULTA OPTIMIZADA (EFICIENCIA) ---
         # Solo traemos las reglas de ESTE usuario y para ESTA cámara

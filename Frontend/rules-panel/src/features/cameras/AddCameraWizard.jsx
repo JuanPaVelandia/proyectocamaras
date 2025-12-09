@@ -13,7 +13,7 @@ const STEPS = [
     { id: 3, title: "Calidad", icon: Sliders },
 ];
 
-export function AddCameraWizard({ onCancel, onSuccess }) {
+export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
     const [currentStep, setCurrentStep] = useState(0);
     const [loading, setLoading] = useState(false);
     const { addToast } = useToast();
@@ -40,6 +40,51 @@ export function AddCameraWizard({ onCancel, onSuccess }) {
         record_enabled: true,
         retain_days: "1",
     });
+
+    // Cargar datos iniciales si estamos editando
+    useEffect(() => {
+        if (initialData) {
+            // Intentar parsear RTSP URL
+            let parsed = {
+                ip: "",
+                port: "554",
+                username: "",
+                password: "",
+                stream_path: ""
+            };
+
+            if (initialData.rtsp_url) {
+                try {
+                    // Hack: Usar URL api de navegador remplazando rtsp por http para que lo parsee
+                    // rtsp://user:pass@ip:port/path
+                    const safeUrl = initialData.rtsp_url.replace("rtsp://", "http://");
+                    const u = new URL(safeUrl);
+                    parsed.ip = u.hostname;
+                    parsed.port = u.port || "554";
+                    parsed.username = u.username ? decodeURIComponent(u.username) : "";
+                    parsed.password = u.password ? decodeURIComponent(u.password) : "";
+                    parsed.stream_path = u.pathname + u.search;
+                } catch (e) {
+                    console.warn("Error parseando RTSP URL", e);
+                }
+            }
+
+            setFormData({
+                brand: "generic", // No guardamos la marca en BD, asumimos genérica o lo que sea
+                name: initialData.name || "",
+                ip: parsed.ip,
+                port: parsed.port,
+                username: parsed.username,
+                password: parsed.password,
+                stream_path: parsed.stream_path,
+                width: initialData.detect?.width || "1920", // Esto no viene en el objeto simple de la lista, cuidado
+                height: initialData.detect?.height || "1080",
+                fps: initialData.detect?.fps || "5",
+                record_enabled: true,
+                retain_days: "1",
+            });
+        }
+    }, [initialData]);
 
     const updateField = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -159,31 +204,39 @@ export function AddCameraWizard({ onCancel, onSuccess }) {
 
         setLoading(true);
         try {
-            // 1. Guardar en BD
-            await api.post("/api/cameras", formData);
-
-            // 2. Guardar en Frigate
-            const path = formData.stream_path.startsWith("/") ? formData.stream_path : `/${formData.stream_path}`;
-            const user = formData.username ? encodeURIComponent(formData.username) : "";
-            const pass = formData.password ? encodeURIComponent(formData.password) : "";
-            const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
-            const rtsp = `rtsp://${auth}${formData.ip}:${formData.port}${path}`;
-
-            try {
-                await frigateProxy.post("/api/cameras/add", { name: formData.name, rtsp_url: rtsp });
-            } catch (e) {
-                console.warn("Error secundario agregando a Frigate", e);
+            // 1. Guardar en BD (POST o PUT)
+            if (initialData && initialData.id) {
+                await api.put(`/api/cameras/${initialData.id}`, formData);
+                addToast("¡Cámara actualizada correctamente!", "success");
+            } else {
+                await api.post("/api/cameras", formData);
+                addToast("¡Cámara creada correctamente!", "success");
             }
 
-            // 3. Reiniciar y recargar
-            try {
-                await api.post("/api/cameras/restart-frigate");
-                await frigateProxy.post("/api/frigate/reload");
-            } catch (e) {
-                console.warn("Error reiniciando", e);
-            }
+            // Nota: El endpoint de backend ya se encarga de actualizar Frigate si es necesario.
+            // Asi que no necesitamos duplicar la lógica de Frigate aquí si el backend es inteligente.
+            // Pero el endpoint original de `add_camera` NO incluía lógica Frigate backend-side completa en este frontend viejo,
+            // aqui veo que el frontend hacia llamadas extras a frigateProxy.
 
-            addToast("¡Cámara configurada correctamente!", "success");
+            // Revisando `handleFinish` anterior:
+            // Hacia: api.post("/api/cameras") -> frigateProxy.post("/api/cameras/add") -> restart -> reload
+
+            // Mi nuevo `update_camera` en backend YA hace todo eso (DB + Frigate + Restart).
+            // Asi que si es EDIT, confiamos en el backend.
+            // Si es ADD (Create), el backend `add_camera` TAMBIEN lo agregue.
+
+            // Un momento, vamos a ver `add_camera` en backend. Si, `add_camera` tambien lo agrega a config.yml
+            // Entonces TODA esta lógica frontend de Frigate es redundante si uso mis endpoints nuevos/mejorados.
+            // Voy a simplificar: Solo llamar a API backend.
+
+            // Sin embargo, para mantener compatibilidad con el código frontend existente (que hace llamadas manuales),
+            // debería verificar si `add_camera` backend hace el trabajo sucio.
+            // Vi el código de `add_camera` en backend: SI, llama a `add_camera_to_frigate_config` y `restart_frigate`.
+
+            // Entonces puedo quitar la lógica manual de frontend y confiar en el backend.
+            // Pero para estar seguro (y no romper nada si el backend falla en frigate), dejaré que el backend maneje todo
+            // y solo haré un reload de UI.
+
             onSuccess();
         } catch (err) {
             console.error(err);

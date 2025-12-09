@@ -77,12 +77,14 @@ services:
       - backend
     env_file:
       - ./python-listener/.env
+    volumes:
+      - ./python-listener:/app
     environment:
       - MQTT_HOST=mosquitto
       # Para uso local, apunta al backend en Docker
-      - CLOUD_API_URL=http://backend:8000/api/events/
+      # - CLOUD_API_URL=http://backend:8000/api/events/
       # Si quieres usar Railway, descomenta la siguiente línea:
-      # - CLOUD_API_URL=https://proyectocamaras-production.up.railway.app/api/events/
+      - CLOUD_API_URL=https://proyectocamaras-production.up.railway.app/api/events/
     networks:
       - frigate_net
 

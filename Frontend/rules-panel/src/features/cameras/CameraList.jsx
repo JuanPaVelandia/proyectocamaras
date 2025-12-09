@@ -5,7 +5,7 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { useToast } from "../../context/ToastContext";
 
-export function CameraList({ onAddCamera }) {
+export function CameraList({ onAddCamera, onEditCamera }) {
     const [cameras, setCameras] = useState([]);
     const [loading, setLoading] = useState(false);
     const [reloadingFrigate, setReloadingFrigate] = useState(false);
@@ -214,19 +214,28 @@ export function CameraList({ onAddCamera }) {
                                     </div>
                                 </div>
 
-                                <Button
-                                    variant="secondary"
-                                    style={{
-                                        width: "100%",
-                                        marginTop: "auto",
-                                        background: "#fff1f2",
-                                        color: "#e11d48",
-                                        border: "1px solid #fecdd3",
-                                    }}
-                                    onClick={() => handleDeleteCamera(camera.id, camera.name, camera.rtsp_url)}
-                                >
-                                    🗑️ Eliminar
-                                </Button>
+                                <div style={{ marginTop: "auto", display: "flex", gap: 8 }}>
+                                    <Button
+                                        variant="secondary"
+                                        style={{ flex: 1 }}
+                                        onClick={() => onEditCamera && onEditCamera(camera)}
+                                        className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-emerald-300 hover:text-emerald-700"
+                                    >
+                                        ✏️ Editar
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        style={{
+                                            flex: 1,
+                                            background: "#fff1f2",
+                                            color: "#e11d48",
+                                            border: "1px solid #fecdd3",
+                                        }}
+                                        onClick={() => handleDeleteCamera(camera.id, camera.name, camera.rtsp_url)}
+                                    >
+                                        🗑️ Eliminar
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     ))}
