@@ -158,7 +158,7 @@ export function RulesSection() {
             // Convertir horarios de hora local a UTC antes de enviar
             const localTimeStart = formatTime(form.time_start_hour, form.time_start_minute);
             const localTimeEnd = formatTime(form.time_end_hour, form.time_end_minute);
-            
+
             const payload = {
                 name: form.name,
                 camera: form.camera || null,
@@ -212,7 +212,7 @@ export function RulesSection() {
             // Convertir horarios de hora local a UTC antes de enviar
             const localTimeStart = formatTime(form.time_start_hour, form.time_start_minute);
             const localTimeEnd = formatTime(form.time_end_hour, form.time_end_minute);
-            
+
             const payload = {
                 name: form.name,
                 camera: form.camera || null,
@@ -477,7 +477,27 @@ export function RulesSection() {
                     <div style={{ display: "flex", gap: 10 }}>
                         <div style={{ flex: 1 }}>
                             <label style={labelStyle}>SCORE MÍN.</label>
-                            <Input placeholder="0.0 - 1.0" type="number" step="0.1" value={form.min_score} onChange={(e) => setForm({ ...form, min_score: e.target.value })} />
+                            <Input
+                                placeholder="0.0 - 1.0"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="1"
+                                value={form.min_score}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    // Permitir vacío para borrar
+                                    if (val === "") {
+                                        setForm({ ...form, min_score: val });
+                                        return;
+                                    }
+                                    // Validar rango strict
+                                    const num = parseFloat(val);
+                                    if (!isNaN(num) && num >= 0 && num <= 1) {
+                                        setForm({ ...form, min_score: val });
+                                    }
+                                }}
+                            />
                         </div>
                         <div style={{ flex: 1 }}>
                             <label style={labelStyle}>DURACIÓN (s)</label>
