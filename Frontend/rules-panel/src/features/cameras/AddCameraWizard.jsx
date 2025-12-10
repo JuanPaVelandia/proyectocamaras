@@ -91,13 +91,12 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
     const checkAgent = async () => {
         try {
             const res = await frigateProxy.get("/health", { timeout: 2000 });
-            if (res.data && res.data.status === "healthy") {
-                setAgentStatus("up");
-            } else {
-                setAgentStatus("down");
-            }
+            const ok = !!(res.data && res.data.status === "healthy");
+            setAgentStatus(ok ? "up" : "down");
+            return ok;
         } catch (e) {
             setAgentStatus("down");
+            return false;
         }
     };
     useEffect(() => {
@@ -298,39 +297,36 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
 
     const renderStep0_Preparation = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            {/* Paso 0.1: Agente Vidria */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
-                <div className="flex gap-4">
-                    <div className="bg-white p-2 rounded-lg shadow-sm h-fit">
-                        <span className="text-2xl">🤖</span>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-slate-800 text-lg mb-1">
-                            ¿Tienes el Agente Vidria instalado?
-                        </h4>
-                        <p className="text-slate-600 text-sm mb-4 leading-relaxed">
-                            Para que el sistema funcione, necesitas tener el Agente Vidria corriendo en la red local de las cámaras.
-                            Es el encargado de procesar el video.
-                        </p>
-                        <div className="flex items-center gap-3">
-                            <a
-                                href="/download/vidria-agent-setup.exe"
-                                target="_blank"
-                                download
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm hover:shadow"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                                Descargar Agente
-                            </a>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 flex items-center gap-1">
-                                    <Check className="w-3 h-3" /> Ya lo tengo instalado
-                                </span>
+            {/* Paso 0.1: Agente Vidria (mostrar solo si el agente no está corriendo) */}
+            {agentStatus !== 'up' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
+                    <div className="flex gap-4">
+                        <div className="bg-white p-2 rounded-lg shadow-sm h-fit">
+                            <span className="text-2xl">🤖</span>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-slate-800 text-lg mb-1">
+                                ¿Tienes el Agente Vidria instalado?
+                            </h4>
+                            <p className="text-slate-600 text-sm mb-4 leading-relaxed">
+                                Para que el sistema funcione, necesitas tener el Agente Vidria corriendo en la red local de las cámaras.
+                                Es el encargado de procesar el video.
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <a
+                                    href="/download/vidria-agent-setup.exe"
+                                    target="_blank"
+                                    download
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm hover:shadow"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                    Descargar Agente
+                                </a>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             <hr className="border-slate-100 my-4" />
 
@@ -535,7 +531,12 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
 
     // --- NAVEGACIÓN ---
 
-    const nextStep = () => {
+    const nextStep = async () => {
+        const ok = await checkAgent();
+        if (!ok) {
+            addToast("Instala y ejecuta el Agente Vidria para continuar.", "error");
+            return;
+        }
         if (currentStep === 0 && !formData.name) return addToast("Ingresa un nombre para la cámara", "error");
         if (currentStep === 1 && (!formData.ip || !formData.port)) return addToast("La IP y el Puerto son requeridos", "error");
         setCurrentStep(prev => Math.min(prev + 1, STEPS.length - 1));
@@ -600,17 +601,19 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
                                 </div>
                             </div>
                         </div>
-                        <button
-                            onClick={checkAgent}
-                            className="text-sm font-medium px-3 py-1 rounded border"
-                            style={{
-                                borderColor: agentStatus === 'up' ? '#34d399' : '#fbbf24',
-                                color: agentStatus === 'up' ? '#065f46' : '#92400e',
-                                background: 'white'
-                            }}
-                        >
-                            Reintentar
-                        </button>
+                        {agentStatus !== 'up' && (
+                            <button
+                                onClick={checkAgent}
+                                className="text-sm font-medium px-3 py-1 rounded border"
+                                style={{
+                                    borderColor: '#fbbf24',
+                                    color: '#92400e',
+                                    background: 'white'
+                                }}
+                            >
+                                Reintentar
+                            </button>
+                        )}
                     </div>
                 )}
                 <div className="mb-8">
@@ -631,12 +634,30 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
                     </Button>
 
                     {currentStep < 3 ? (
-                        <Button
-                            onClick={nextStep}
-                            className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:shadow-emerald-500/25 px-8 flex items-center justify-center gap-2 whitespace-nowrap"
-                        >
-                            Siguiente <ChevronRight className="w-4 h-4" />
-                        </Button>
+                        currentStep === 0 ? (
+                            <div className="flex items-center gap-3">
+                                {agentStatus !== 'up' && (
+                                    <span className="text-amber-700 text-sm">
+                                        Necesitas ejecutar el Agente Vidria para continuar
+                                    </span>
+                                )}
+                                <Button
+                                    onClick={nextStep}
+                                    disabled={agentStatus !== 'up'}
+                                    className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:shadow-emerald-500/25 px-8 flex items-center justify-center gap-2 whitespace-nowrap"
+                                >
+                                    Siguiente <ChevronRight className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <Button
+                                onClick={nextStep}
+                                disabled={agentStatus !== 'up'}
+                                className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:shadow-emerald-500/25 px-8 flex items-center justify-center gap-2 whitespace-nowrap"
+                            >
+                                Siguiente <ChevronRight className="w-4 h-4" />
+                            </Button>
+                        )
                     ) : (
                         <Button
                             onClick={handleFinish}

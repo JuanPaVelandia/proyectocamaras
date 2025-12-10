@@ -55,13 +55,12 @@ export function OnboardingWizard({ onComplete }) {
     const checkAgent = async () => {
         try {
             const res = await frigateProxy.get("/health", { timeout: 2000 });
-            if (res.data && res.data.status === "healthy") {
-                setAgentStatus("up");
-            } else {
-                setAgentStatus("down");
-            }
+            const ok = !!(res.data && res.data.status === "healthy");
+            setAgentStatus(ok ? "up" : "down");
+            return ok;
         } catch (e) {
             setAgentStatus("down");
+            return false;
         }
     };
     useEffect(() => {
@@ -115,7 +114,8 @@ export function OnboardingWizard({ onComplete }) {
     };
 
     const handleAddCamera = async () => {
-        if (agentStatus !== 'up') {
+        const ok = await checkAgent();
+        if (!ok) {
             addToast('Instala y ejecuta el Agente Vidria para agregar cámaras.', 'error');
             return;
         }
@@ -246,20 +246,22 @@ export function OnboardingWizard({ onComplete }) {
                                 </div>
                             </div>
                         </div>
-                        <button
-                            onClick={checkAgent}
-                            style={{
-                                fontSize: 13,
-                                fontWeight: 600,
-                                padding: '6px 10px',
-                                borderRadius: 6,
-                                background: 'white',
-                                border: `1px solid ${agentStatus === 'up' ? '#34d399' : '#fbbf24'}`,
-                                color: agentStatus === 'up' ? '#065f46' : '#92400e'
-                            }}
-                        >
-                            Reintentar
-                        </button>
+                        {agentStatus !== 'up' && (
+                            <button
+                                onClick={checkAgent}
+                                style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    padding: '6px 10px',
+                                    borderRadius: 6,
+                                    background: 'white',
+                                    border: '1px solid #fbbf24',
+                                    color: '#92400e'
+                                }}
+                            >
+                                Reintentar
+                            </button>
+                        )}
                     </div>
                 )}
                 {/* Progress Bar */}
