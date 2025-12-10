@@ -17,6 +17,7 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
     const [currentStep, setCurrentStep] = useState(0);
     const [loading, setLoading] = useState(false);
     const { addToast } = useToast();
+    const [agentStatus, setAgentStatus] = useState("checking"); // 'checking' | 'up' | 'down'
 
     // Estados para búsqueda de red
     const [scanning, setScanning] = useState(false);
@@ -85,6 +86,23 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
             });
         }
     }, [initialData]);
+
+    // Comprobar si el Agente Vidria (proxy local) está corriendo
+    const checkAgent = async () => {
+        try {
+            const res = await frigateProxy.get("/health", { timeout: 2000 });
+            if (res.data && res.data.status === "healthy") {
+                setAgentStatus("up");
+            } else {
+                setAgentStatus("down");
+            }
+        } catch (e) {
+            setAgentStatus("down");
+        }
+    };
+    useEffect(() => {
+        checkAgent();
+    }, []);
 
     const updateField = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -196,6 +214,15 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
         }
     };
 
+    const buildRtspUrl = () => {
+        const path = formData.stream_path?.startsWith("/") ? formData.stream_path : `/${formData.stream_path || ""}`;
+        const user = formData.username ? encodeURIComponent(formData.username) : "";
+        const pass = formData.password ? encodeURIComponent(formData.password) : "";
+        const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
+        if (!formData.ip || !formData.port) return "";
+        return `rtsp://${auth}${formData.ip}:${formData.port}${path}`;
+    };
+
     const handleFinish = async () => {
         if (!formData.name) {
             addToast("La cámara necesita un nombre", "error");
@@ -204,7 +231,7 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
 
         setLoading(true);
         try {
-            // 1. Guardar en BD (POST o PUT)
+            // 1) Guardar/actualizar en BD (backend)
             if (initialData && initialData.id) {
                 await api.put(`/api/cameras/${initialData.id}`, formData);
                 addToast("¡Cámara actualizada correctamente!", "success");
@@ -213,29 +240,43 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
                 addToast("¡Cámara creada correctamente!", "success");
             }
 
-            // Nota: El endpoint de backend ya se encarga de actualizar Frigate si es necesario.
-            // Asi que no necesitamos duplicar la lógica de Frigate aquí si el backend es inteligente.
-            // Pero el endpoint original de `add_camera` NO incluía lógica Frigate backend-side completa en este frontend viejo,
-            // aqui veo que el frontend hacia llamadas extras a frigateProxy.
+            // 2) Intentar sincronizar con Frigate local vía proxy (mejor experiencia local)
+            //    - En algunos despliegues el backend no puede tocar el Frigate local (Railway/Vercel),
+            //      por eso mantenemos la lógica del proxy local como antes.
+            const rtsp = buildRtspUrl();
+            if (rtsp) {
+                try {
+                    // Si estamos editando y cambió el nombre o la URL, intentar limpiar la entrada previa
+                    if (initialData && (initialData.name !== formData.name || (initialData.rtsp_url || "") !== rtsp)) {
+                        try {
+                            await frigateProxy.post("/api/cameras/delete", {
+                                name: initialData.name,
+                                rtsp_url: initialData.rtsp_url || "",
+                            });
+                        } catch (e) {
+                            console.warn("No se pudo eliminar la cámara anterior en Frigate local", e);
+                        }
+                    }
+                    // Agregar/actualizar entrada de cámara en Frigate local
+                    await frigateProxy.post("/api/cameras/add", { name: formData.name, rtsp_url: rtsp });
+                } catch (e) {
+                    console.warn("No se pudo agregar la cámara en Frigate local (proxy no disponible?)", e);
+                }
+            } else {
+                console.warn("RTSP URL incompleta; omitimos sincronización con Frigate local");
+            }
 
-            // Revisando `handleFinish` anterior:
-            // Hacia: api.post("/api/cameras") -> frigateProxy.post("/api/cameras/add") -> restart -> reload
-
-            // Mi nuevo `update_camera` en backend YA hace todo eso (DB + Frigate + Restart).
-            // Asi que si es EDIT, confiamos en el backend.
-            // Si es ADD (Create), el backend `add_camera` TAMBIEN lo agregue.
-
-            // Un momento, vamos a ver `add_camera` en backend. Si, `add_camera` tambien lo agrega a config.yml
-            // Entonces TODA esta lógica frontend de Frigate es redundante si uso mis endpoints nuevos/mejorados.
-            // Voy a simplificar: Solo llamar a API backend.
-
-            // Sin embargo, para mantener compatibilidad con el código frontend existente (que hace llamadas manuales),
-            // debería verificar si `add_camera` backend hace el trabajo sucio.
-            // Vi el código de `add_camera` en backend: SI, llama a `add_camera_to_frigate_config` y `restart_frigate`.
-
-            // Entonces puedo quitar la lógica manual de frontend y confiar en el backend.
-            // Pero para estar seguro (y no romper nada si el backend falla en frigate), dejaré que el backend maneje todo
-            // y solo haré un reload de UI.
+            // 3) Intentar reiniciar/recargar Frigate (best-effort)
+            try {
+                await frigateProxy.post("/api/frigate/reload");
+            } catch (e) {
+                console.warn("No se pudo recargar Frigate vía proxy", e);
+            }
+            try {
+                await api.post("/api/cameras/restart-frigate");
+            } catch (e) {
+                // Backend puede no tener acceso a Frigate local en despliegues en la nube
+            }
 
             onSuccess();
         } catch (err) {
@@ -536,6 +577,37 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
             </div>
 
             <Card className="p-6 md:p-8 min-h-[400px] flex flex-col justify-between shadow-xl border-slate-200">
+                {/* Banner de estado del Agente Vidria */}
+                {agentStatus !== "checking" && (
+                    <div className={`mb-4 p-3 rounded-lg border flex items-center justify-between ${agentStatus === 'up' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 18 }}>
+                                {agentStatus === 'up' ? '✅' : '⚠️'}
+                            </span>
+                            <div>
+                                <div className="font-semibold">
+                                    {agentStatus === 'up' ? 'Agente Vidria corriendo' : 'Agente Vidria no detectado'}
+                                </div>
+                                <div className="text-sm opacity-80">
+                                    {agentStatus === 'up'
+                                        ? 'Búsqueda de cámaras y configuración local habilitadas.'
+                                        : 'Inicia el Agente Vidria en este equipo para habilitar búsqueda de cámaras y configurar Frigate automáticamente.'}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={checkAgent}
+                            className="text-sm font-medium px-3 py-1 rounded border"
+                            style={{
+                                borderColor: agentStatus === 'up' ? '#34d399' : '#fbbf24',
+                                color: agentStatus === 'up' ? '#065f46' : '#92400e',
+                                background: 'white'
+                            }}
+                        >
+                            Reintentar
+                        </button>
+                    </div>
+                )}
                 <div className="mb-8">
                     {currentStep === 0 && renderStep0_Preparation()}
                     {currentStep === 1 && renderStep1_Connection()}

@@ -19,6 +19,7 @@ export function OnboardingWizard({ onComplete }) {
     const [objects, setObjects] = useState([]);
     const [loading, setLoading] = useState(false);
     const { addToast } = useToast();
+    const [agentStatus, setAgentStatus] = useState("checking"); // 'checking' | 'up' | 'down'
 
     // Formulario de cámara
     const [cameraForm, setCameraForm] = useState({
@@ -48,6 +49,23 @@ export function OnboardingWizard({ onComplete }) {
     useEffect(() => {
         checkSystemStatus();
         loadObjects();
+    }, []);
+
+    // Detectar Agente Vidria (proxy local)
+    const checkAgent = async () => {
+        try {
+            const res = await frigateProxy.get("/health", { timeout: 2000 });
+            if (res.data && res.data.status === "healthy") {
+                setAgentStatus("up");
+            } else {
+                setAgentStatus("down");
+            }
+        } catch (e) {
+            setAgentStatus("down");
+        }
+    };
+    useEffect(() => {
+        checkAgent();
     }, []);
 
     const checkSystemStatus = async () => {
@@ -87,6 +105,15 @@ export function OnboardingWizard({ onComplete }) {
         }
     };
 
+    const buildRtspUrl = () => {
+        const path = cameraForm.stream_path?.startsWith("/") ? cameraForm.stream_path : `/${cameraForm.stream_path || ""}`;
+        const user = cameraForm.username ? encodeURIComponent(cameraForm.username) : "";
+        const pass = cameraForm.password ? encodeURIComponent(cameraForm.password) : "";
+        const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
+        if (!cameraForm.ip || !cameraForm.port) return "";
+        return `rtsp://${auth}${cameraForm.ip}:${cameraForm.port}${path}`;
+    };
+
     const handleAddCamera = async () => {
         if (!cameraForm.name || !cameraForm.ip) {
             addToast("El nombre y la IP son obligatorios", "error");
@@ -103,12 +130,27 @@ export function OnboardingWizard({ onComplete }) {
                 record_enabled: true,
                 retain_days: 1,
             });
-            
-            // Reiniciar Frigate
+
+            // Intentar agregar a Frigate local vía proxy y recargar (best-effort)
+            const rtsp = buildRtspUrl();
+            if (rtsp) {
+                try {
+                    await frigateProxy.post("/api/cameras/add", { name: cameraForm.name, rtsp_url: rtsp });
+                } catch (e) {
+                    console.warn("No se pudo agregar la cámara en Frigate local (proxy no disponible?)", e);
+                }
+            }
+            try {
+                await frigateProxy.post("/api/frigate/reload");
+            } catch (e) {
+                // Puede fallar si no hay proxy local accesible (HTTPS/HTTP). Ignorar.
+            }
+
+            // Intentar reiniciar Frigate desde backend (puede no tener acceso en producción)
             try {
                 await api.post("/api/cameras/restart-frigate");
             } catch (e) {
-                // Ignorar error de reinicio
+                // Ignorar error de reinicio si backend no puede tocar Frigate local
             }
             
             addToast("Cámara agregada correctamente", "success");
@@ -174,6 +216,48 @@ export function OnboardingWizard({ onComplete }) {
             justifyContent: "center",
         }}>
             <Card style={{ maxWidth: 800, width: "100%", padding: 40 }}>
+                {/* Banner de estado del Agente Vidria */}
+                {agentStatus !== 'checking' && (
+                    <div style={{
+                        marginBottom: 16,
+                        padding: 12,
+                        borderRadius: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        border: `1px solid ${agentStatus === 'up' ? '#bbf7d0' : '#fde68a'}`,
+                        background: agentStatus === 'up' ? '#ecfdf5' : '#fffbeb',
+                        color: agentStatus === 'up' ? '#065f46' : '#92400e'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 18 }}>{agentStatus === 'up' ? '✅' : '⚠️'}</span>
+                            <div>
+                                <div style={{ fontWeight: 600 }}>
+                                    {agentStatus === 'up' ? 'Agente Vidria corriendo' : 'Agente Vidria no detectado'}
+                                </div>
+                                <div style={{ fontSize: 13, opacity: 0.85 }}>
+                                    {agentStatus === 'up'
+                                        ? 'Búsqueda de cámaras y configuración local habilitadas.'
+                                        : 'Inicia el Agente Vidria en este equipo para habilitar búsqueda de cámaras y configurar Frigate automáticamente.'}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={checkAgent}
+                            style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                background: 'white',
+                                border: `1px solid ${agentStatus === 'up' ? '#34d399' : '#fbbf24'}`,
+                                color: agentStatus === 'up' ? '#065f46' : '#92400e'
+                            }}
+                        >
+                            Reintentar
+                        </button>
+                    </div>
+                )}
                 {/* Progress Bar */}
                 <div style={{ marginBottom: 40 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
@@ -497,4 +581,3 @@ const labelStyle = {
     marginLeft: 2,
     textTransform: "uppercase",
 };
-
