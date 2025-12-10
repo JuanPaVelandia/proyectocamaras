@@ -339,8 +339,15 @@
             const data = await res.json();
             const token = data?.accessToken || data?.access_token || data?.token;
             const user = data?.user || null;
-            if (!token || !user) throw new Error('Respuesta inválida del servidor');
-            setSession(token, user);
+            const resolvedUser = user || (data && data.username ? { username: data.username, email: data?.email || '' } : null);
+            if (!token || !resolvedUser) throw new Error('Respuesta inválida del servidor');
+            setSession(token, resolvedUser);
+            try {
+              const uname = resolvedUser?.username || null;
+              if (uname) await window.health.setCustomerId(uname);
+            } catch (e) {
+              console.warn('No se pudo actualizar CUSTOMER_ID en compose:', e);
+            }
             $('password').value = '';
             showAppViews();
             load();
@@ -356,8 +363,9 @@
       // LOGOUT
       const btnLogout = $('btnLogout');
       if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
+        btnLogout.addEventListener('click', async () => {
           clearSession();
+          try { await window.health.clearCustomerId(); } catch {}
           if (dockerPollId) { clearInterval(dockerPollId); dockerPollId = null; }
           showLoginView();
         });

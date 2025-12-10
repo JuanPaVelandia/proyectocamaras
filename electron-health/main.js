@@ -211,6 +211,116 @@ function resolveRepoDir() {
   return __dirname;
 }
 
+function updateCustomerIdInCompose(newId) {
+  const repoDir = resolveRepoDir();
+  const composePath = path.join(repoDir, 'docker-compose.client.yml');
+  if (!fs.existsSync(composePath)) {
+    throw new Error(`No se encontró docker-compose.client.yml en ${repoDir}`);
+  }
+  const original = fs.readFileSync(composePath, 'utf8');
+  const lines = original.split(/\r?\n/);
+
+  // Find 'listener:' service block
+  const svcIdx = lines.findIndex((l) => /^\s*listener\s*:\s*$/.test(l));
+  if (svcIdx === -1) throw new Error('Servicio "listener" no encontrado en docker-compose.client.yml');
+  const svcIndent = (lines[svcIdx].match(/^\s*/)||[''])[0].length;
+  // Find end of service block: next line starting with same indent and ending with ':' (another service or 'networks:')
+  let endIdx = lines.length;
+  for (let i = svcIdx + 1; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)([A-Za-z0-9_-]+)\s*:\s*$/);
+    if (!m) continue;
+    const indent = m[1].length;
+    if (indent === svcIndent) { endIdx = i; break; }
+  }
+
+  // Search for environment block within [svcIdx+1, endIdx)
+  let envIdx = -1;
+  let envIndent = null;
+  for (let i = svcIdx + 1; i < endIdx; i++) {
+    const m = lines[i].match(/^(\s*)environment\s*:\s*$/);
+    if (m) {
+      envIdx = i;
+      envIndent = m[1].length;
+      break;
+    }
+  }
+
+  function ensureEnvBlockInserted() {
+    // Insert an environment: block before networks: (if present) or before endIdx
+    let insertAt = -1;
+    for (let i = svcIdx + 1; i < endIdx; i++) {
+      if (/^\s*networks\s*:\s*$/.test(lines[i])) { insertAt = i; break; }
+    }
+    if (insertAt === -1) insertAt = endIdx;
+    const baseIndent = ' '.repeat(svcIndent + 2);
+    const itemIndent = ' '.repeat(svcIndent + 4);
+    const toInsert = [
+      `${baseIndent}environment:`,
+      `${itemIndent}- CUSTOMER_ID=${newId}`,
+    ];
+    lines.splice(insertAt, 0, ...toInsert);
+    return { envIdx: insertAt, envIndent: svcIndent + 2 };
+  }
+
+  if (newId && typeof newId === 'string') {
+    // Set or update CUSTOMER_ID
+    if (envIdx === -1) {
+      const res = ensureEnvBlockInserted();
+      envIdx = res.envIdx; envIndent = res.envIndent;
+    } else {
+      // Look for existing CUSTOMER_ID item under environment list
+      const envListIndent = envIndent + 2;
+      let found = false;
+      let insertAfter = envIdx;
+      for (let i = envIdx + 1; i < endIdx; i++) {
+        const line = lines[i];
+        const indent = (line.match(/^\s*/)||[''])[0].length;
+        if (indent <= envIndent) break; // end of environment list
+        if (/^\s*-\s*CUSTOMER_ID\s*=/.test(line)) {
+          lines[i] = `${' '.repeat(envListIndent)}- CUSTOMER_ID=${newId}`;
+          found = true;
+          break;
+        }
+        insertAfter = i; // track last env item
+      }
+      if (!found) {
+        // Insert after last env item or directly after 'environment:' if no items
+        const insertPos = insertAfter === envIdx ? envIdx + 1 : insertAfter + 1;
+        lines.splice(insertPos, 0, `${' '.repeat(envListIndent)}- CUSTOMER_ID=${newId}`);
+      }
+    }
+  } else {
+    // Clear CUSTOMER_ID: remove the line if present
+    if (envIdx !== -1) {
+      const envListIndent = envIndent + 2;
+      for (let i = envIdx + 1; i < endIdx; i++) {
+        const line = lines[i];
+        const indent = (line.match(/^\s*/)||[''])[0].length;
+        if (indent <= envIndent) break;
+        if (/^\s*-\s*CUSTOMER_ID\s*=/.test(line)) {
+          lines.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  const updated = lines.join('\n');
+  if (updated !== original) {
+    fs.writeFileSync(composePath, updated, 'utf8');
+  }
+  return true;
+}
+
+function setCustomerId(id) {
+  if (!id || typeof id !== 'string') throw new Error('CUSTOMER_ID inválido');
+  return updateCustomerIdInCompose(id);
+}
+
+function clearCustomerId() {
+  return updateCustomerIdInCompose(null);
+}
+
 async function runComposeUp() {
   const compose = await detectComposeCmd();
   if (!compose.bin) {
@@ -246,6 +356,12 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('health:installDocker', async () => {
     try { return await installDocker(); } catch (e) { return String(e); }
+  });
+  ipcMain.handle('health:setCustomerId', async (_evt, id) => {
+    try { return await setCustomerId(id); } catch (e) { return String(e); }
+  });
+  ipcMain.handle('health:clearCustomerId', async () => {
+    try { return await clearCustomerId(); } catch (e) { return String(e); }
   });
   createWindow();
   app.on('activate', () => {
