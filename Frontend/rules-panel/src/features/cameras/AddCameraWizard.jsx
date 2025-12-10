@@ -224,6 +224,11 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
     };
 
     const handleFinish = async () => {
+        // Restringir creación y edición cuando el Agente no está corriendo
+        if (agentStatus !== 'up') {
+            addToast("Instala y ejecuta el Agente Vidria para guardar cambios en cámaras.", "error");
+            return;
+        }
         if (!formData.name) {
             addToast("La cámara necesita un nombre", "error");
             return;
@@ -635,7 +640,7 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
                     ) : (
                         <Button
                             onClick={handleFinish}
-                            disabled={loading}
+                            disabled={loading || agentStatus !== 'up'}
                             className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:shadow-emerald-500/25 px-8 flex items-center justify-center gap-2 whitespace-nowrap"
                         >
                             {loading ? "Guardando..." : "Finalizar y Guardar"} <Check className="w-4 h-4" />

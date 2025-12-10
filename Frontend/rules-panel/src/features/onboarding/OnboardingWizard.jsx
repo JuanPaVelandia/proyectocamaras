@@ -115,6 +115,10 @@ export function OnboardingWizard({ onComplete }) {
     };
 
     const handleAddCamera = async () => {
+        if (agentStatus !== 'up') {
+            addToast('Instala y ejecuta el Agente Vidria para agregar cámaras.', 'error');
+            return;
+        }
         if (!cameraForm.name || !cameraForm.ip) {
             addToast("El nombre y la IP son obligatorios", "error");
             return;
@@ -385,7 +389,7 @@ export function OnboardingWizard({ onComplete }) {
                                 </Button>
                                 <Button
                                     onClick={handleAddCamera}
-                                    disabled={loading || !cameraForm.name || !cameraForm.ip}
+                                    disabled={loading || !cameraForm.name || !cameraForm.ip || agentStatus !== 'up'}
                                     style={{ flex: 1 }}
                                 >
                                     {loading ? "Agregando..." : "Agregar Cámara"}
