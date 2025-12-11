@@ -1,6 +1,6 @@
 import { Shield } from "lucide-react"
 
-export function Footer() {
+export function Footer({ onPrivacyPolicy }) {
     return (
         <footer className="border-t border-border bg-card">
             <div className="container mx-auto max-w-7xl px-4 py-12">
@@ -21,7 +21,15 @@ export function Footer() {
                 </div>
 
                 <div className="mt-12 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
-                    <p className="text-sm text-muted-foreground">© 2025 Vidria. Todos los derechos reservados.</p>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <p className="text-sm text-muted-foreground">© 2025 Vidria. Todos los derechos reservados.</p>
+                        <button
+                            onClick={onPrivacyPolicy}
+                            className="text-sm text-muted-foreground hover:text-foreground transition-colors hover:underline"
+                        >
+                            Política de Privacidad
+                        </button>
+                    </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Shield className="h-4 w-4 text-primary" />
                         <span>Procesamiento local seguro</span>

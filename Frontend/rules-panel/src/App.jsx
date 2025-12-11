@@ -11,6 +11,7 @@ import { CamerasSection } from "./features/cameras/CamerasSection";
 import { ProfilePage } from "./features/profile/ProfilePage";
 import { OnboardingWizard } from "./features/onboarding/OnboardingWizard";
 import { LandingPageV0 } from "./features/landing/LandingPageV0";
+import { PrivacyPolicy } from "./features/legal/PrivacyPolicy"; // Importar componente
 import DiagnosticsPage from "./features/diagnostics/DiagnosticsPage";
 import { Button } from "./components/ui/Button";
 import { ToastProvider } from "./context/ToastContext";
@@ -21,10 +22,11 @@ import "./styles/layout.css";
 function App() {
   const [token, setToken] = useState(localStorage.getItem("adminToken") || "");
   const [view, setView] = useState(() => {
-    // Check for reset password URL first
-    if (window.location.pathname === "/reset-password") {
-      return "reset-password";
-    }
+    // Check for specific URLs first
+    const path = window.location.pathname;
+    if (path === "/reset-password") return "reset-password";
+    if (path === "/privacidad") return "privacy-policy"; // Ruta directa
+
     const savedView = localStorage.getItem("view");
     if (savedView === "landing") return "landing";
     return token ? "dashboard" : "landing";
@@ -72,6 +74,11 @@ function App() {
     setView("login");
   };
 
+  const handleNavigateToPrivacy = () => {
+    window.history.pushState({}, "", "/privacidad");
+    setView("privacy-policy");
+  };
+
   // Check for debug mode
   const urlParams = new URLSearchParams(window.location.search);
   const debugMode = urlParams.get('debug') === 'true';
@@ -96,6 +103,14 @@ function App() {
           onRegister={() => {
             localStorage.setItem("view", "register");
             setView("register");
+          }}
+          onPrivacyPolicy={handleNavigateToPrivacy}
+        />
+      ) : view === "privacy-policy" ? (
+        <PrivacyPolicy
+          onBack={() => {
+            window.history.pushState({}, "", "/");
+            setView("landing");
           }}
         />
       ) : view === "login" ? (

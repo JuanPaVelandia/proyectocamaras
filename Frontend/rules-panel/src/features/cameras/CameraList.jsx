@@ -200,11 +200,15 @@ export function CameraList({ onAddCamera, onEditCamera }) {
                                             {(() => {
                                                 try {
                                                     if (!camera.rtsp_url) return "N/A";
-                                                    // Intentar parsear
                                                     const urlStr = camera.rtsp_url.includes("://") ? camera.rtsp_url : `rtsp://${camera.rtsp_url}`;
-                                                    return new URL(urlStr.replace("rtsp://", "http://")).hostname;
+                                                    // Parsear usando http para compatibilidad
+                                                    const u = new URL(urlStr.replace("rtsp://", "http://"));
+                                                    // Ocultar contraseña
+                                                    if (u.password) u.password = "*****";
+                                                    // Restaurar protocolo y devolver
+                                                    return u.toString().replace("http://", "rtsp://");
                                                 } catch (e) {
-                                                    return camera.rtsp_url; // Fallback to raw string
+                                                    return camera.rtsp_url;
                                                 }
                                             })()}
                                         </span>
