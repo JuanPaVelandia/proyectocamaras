@@ -6,7 +6,7 @@ import { HowItWorks } from "./components/v0/how-it-works"
 import { DemoSection } from "./components/v0/demo-section"
 import { Footer } from "./components/v0/footer"
 
-export function LandingPageV0({ onGetStarted, onLogin, onRegister }) {
+export function LandingPageV0({ onGetStarted, onLogin, onRegister, onPrivacyPolicy }) {
     return (
         <main className="min-h-screen bg-background text-foreground">
             <Header onLogin={onLogin} onRegister={onRegister} />
@@ -14,7 +14,7 @@ export function LandingPageV0({ onGetStarted, onLogin, onRegister }) {
             <DemoSection />
             <ValueProposition />
             <HowItWorks />
-            <Footer />
+            <Footer onPrivacyPolicy={onPrivacyPolicy} />
         </main>
     );
 }

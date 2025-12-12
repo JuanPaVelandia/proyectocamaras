@@ -63,7 +63,9 @@ services:
       - ./config:/config:rw # Montar config para poder editar config.yml
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-frigate_events}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-frigate_events}
       - FRIGATE_CONFIG_PATH=/config/config.yml
+      - API_KEY=v1dria_s3cr3t_k3y_2024 # <--- TIENE QUE COINCIDIR CON LA DEL LISTENER
     networks:
       - frigate_net
 
@@ -85,6 +87,7 @@ services:
       # - CLOUD_API_URL=http://backend:8000/api/events/
       # Si quieres usar Railway, descomenta la siguiente línea:
       - CLOUD_API_URL=https://proyectocamaras-production.up.railway.app/api/events/
+      - CLOUD_API_KEY=v1dria_s3cr3t_k3y_2024 # <--- CAMBIA ESTO POR LA CLAVE REAL
     networks:
       - frigate_net
 
