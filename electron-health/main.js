@@ -72,6 +72,25 @@ async function getDockerVersion() {
   return r.code === 0 ? r.out : null;
 }
 
+async function isDockerDaemonReady() {
+  const dockerBin = findDockerBin();
+  const r = await run(dockerBin, ['info']);
+  return r.code === 0;
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+async function waitForDockerReady(timeoutMs = 120000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      if (await isDockerDaemonReady()) return true;
+    } catch {}
+    await sleep(2000);
+  }
+  return false;
+}
+
 async function getContainerState(name) {
   // Cross-platform: parse full JSON to avoid quoting issues with -f
   const r = await run('docker', ['inspect', name]);
@@ -333,18 +352,73 @@ async function runComposeUp() {
   return r.out || 'ok';
 }
 
+async function runComposeDown() {
+  const compose = await detectComposeCmd();
+  if (!compose.bin) {
+    throw new Error('docker-compose no encontrado. Instala Docker Compose v1 o v2.');
+  }
+  const repoDir = resolveRepoDir();
+  // Stop and remove services defined in client compose
+  const args = [...compose.args, '-f', 'docker-compose.client.yml', 'down'];
+  const r = await run(compose.bin, args, { cwd: repoDir });
+  if (r.code !== 0) throw new Error(r.err || 'Error al ejecutar docker-compose down');
+  return r.out || 'ok';
+}
+
+let mainWindow = null;
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 900,
-    height: 700,
+    height: 600,
+    resizable: false,
+    useContentSize: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  win.loadFile(path.join(__dirname, 'index.html'));
+  // Load new wizard UI
+  const wizardPath = path.join(__dirname, 'wizard.html');
+  win.loadFile(wizardPath);
+  mainWindow = win;
+
+  win.webContents.on('did-finish-load', async () => {
+    try {
+      const h = await win.webContents.executeJavaScript('(() => { const el = document.querySelector(".wizard"); return el ? el.offsetHeight : document.body.scrollHeight; })()');
+      const [w] = win.getContentSize();
+      win.setContentSize(w, Math.min(Math.max(420, Math.ceil(h)), 820));
+    } catch {}
+  });
 }
 
-app.whenReady().then(() => {
+async function ensureAutoLaunchEnabled() {
+  if (process.platform === 'darwin') {
+    try {
+      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+    } catch (e) {
+      // best-effort
+    }
+  }
+}
+
+async function autoStartServicesIfAutoLaunched() {
+  if (process.platform !== 'darwin') return;
+  const settings = app.getLoginItemSettings ? app.getLoginItemSettings() : {};
+  const wasOpenedAtLogin = !!settings.wasOpenedAtLogin;
+  if (!wasOpenedAtLogin) return;
+  try {
+    await startDocker();
+    const ok = await waitForDockerReady(120000);
+    if (!ok) return;
+    await runComposeUp();
+  } catch (e) {
+    // ignore, UI has manual controls too
+  }
+}
+
+app.whenReady().then(async () => {
+  await ensureAutoLaunchEnabled();
+  await autoStartServicesIfAutoLaunched();
   ipcMain.handle('health:getStatus', async () => {
     try { return await getStatus(); } catch (e) { return { error: String(e) }; }
   });
@@ -354,6 +428,9 @@ app.whenReady().then(() => {
   ipcMain.handle('health:composeUp', async () => {
     try { return await runComposeUp(); } catch (e) { return String(e); }
   });
+  ipcMain.handle('health:composeDown', async () => {
+    try { return await runComposeDown(); } catch (e) { return String(e); }
+  });
   ipcMain.handle('health:installDocker', async () => {
     try { return await installDocker(); } catch (e) { return String(e); }
   });
@@ -362,6 +439,15 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('health:clearCustomerId', async () => {
     try { return await clearCustomerId(); } catch (e) { return String(e); }
+  });
+  ipcMain.handle('health:fitWindow', async () => {
+    try {
+      if (!mainWindow) return false;
+      const h = await mainWindow.webContents.executeJavaScript('(() => { const el = document.querySelector(".wizard"); return el ? el.offsetHeight : document.body.scrollHeight; })()');
+      const [w] = mainWindow.getContentSize();
+      mainWindow.setContentSize(w, Math.min(Math.max(420, Math.ceil(h)), 820));
+      return true;
+    } catch (e) { return String(e); }
   });
   createWindow();
   app.on('activate', () => {
