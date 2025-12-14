@@ -91,6 +91,21 @@ async function waitForDockerReady(timeoutMs = 120000) {
   return false;
 }
 
+async function startDockerAndWait(timeoutMs = 120000) {
+  const deadline = Date.now() + timeoutMs;
+  await startDocker();
+  let remaining = Math.max(0, deadline - Date.now());
+  const firstWait = Math.min(30000, remaining);
+  if (await waitForDockerReady(firstWait)) return true;
+
+  remaining = Math.max(0, deadline - Date.now());
+  // If Docker still not detected on Windows, retry using alternate launcher
+  if (os.platform() === 'win32') {
+    await startDocker({ preferAltWinLauncher: true });
+  }
+  return waitForDockerReady(Math.max(0, deadline - Date.now()));
+}
+
 async function getContainerState(name) {
   // Cross-platform: parse full JSON to avoid quoting issues with -f
   const r = await run('docker', ['inspect', name]);
@@ -133,7 +148,8 @@ async function getStatus() {
   };
 }
 
-async function startDocker() {
+async function startDocker(opts = {}) {
+  const { preferAltWinLauncher = false } = opts;
   const platform = os.platform();
   if (platform === 'darwin') {
     // macOS: launch Docker Desktop
@@ -142,12 +158,20 @@ async function startDocker() {
   }
   if (platform === 'win32') {
     // Windows: try to start Docker Desktop
-    // 1) Try PowerShell
+    // Primary: direct exe via cmd (was fallback before)
+    if (!preferAltWinLauncher) {
+      const rCmd = await run('cmd', ['/c', 'start', '""', '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"'], { windowsHide: true });
+      if (rCmd.code === 0) return true;
+    }
+    // Fallback: PowerShell Start-Process
     let r = await run('powershell', ['-Command', 'Start-Process "Docker Desktop"'], { windowsHide: true });
     if (r.code === 0) return true;
-    // 2) Try default path
-    r = await run('cmd', ['/c', 'start', '""', '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"'], { windowsHide: true });
-    return r.code === 0;
+    // Final attempt: try the other launcher if the preferred one was skipped
+    if (preferAltWinLauncher) {
+      const rCmd = await run('cmd', ['/c', 'start', '""', '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"'], { windowsHide: true });
+      if (rCmd.code === 0) return true;
+    }
+    return false;
   }
   // Linux: best-effort
   let r = await run('systemctl', ['start', 'docker']);
@@ -188,9 +212,16 @@ async function installDockerWin() {
   if (!exists(installer)) {
     throw new Error(`No se encontró el instalador en: ${installer}`);
   }
-  const exeEsc = installer.replace(/"/g, '\\"');
-  const ps = `Start-Process -FilePath \"${exeEsc}\" -ArgumentList 'install --accept-license --always-run-service' -Verb RunAs -Wait`;
-  const r = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-Command', ps], { windowsHide: true });
+  const tmpScript = path.join(os.tmpdir(), `vidria_install_docker_${Date.now()}.ps1`);
+  const safePath = installer.replace(/`/g, '``').replace(/"/g, '""');
+  const ps = `
+$installer = "${safePath}"
+if (-not (Test-Path $installer)) { throw "No se encontrA3 el instalador en: $installer" }
+Start-Process -FilePath $installer -ArgumentList 'install --accept-license --always-run-service' -Verb RunAs -Wait
+`;
+  fs.writeFileSync(tmpScript, ps, 'utf8');
+  const r = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-File', tmpScript], { windowsHide: true, shell: false });
+  try { fs.unlinkSync(tmpScript); } catch {}
   if (r.code !== 0) throw new Error(r.err || r.out || 'Fallo instalando Docker en Windows');
   // Intentar abrir Docker Desktop
   let r2 = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Start-Process "Docker Desktop"'], { windowsHide: true });
@@ -345,6 +376,10 @@ async function runComposeUp() {
   if (!compose.bin) {
     throw new Error('docker-compose no encontrado. Instala Docker Compose v1 o v2.');
   }
+  const ready = await waitForDockerReady(120000);
+  if (!ready) {
+    throw new Error('Docker no estA listo. Abre Docker Desktop e intA©ntalo de nuevo.');
+  }
   const repoDir = resolveRepoDir();
   const args = [...compose.args, '-f', 'docker-compose.client.yml', 'up', '-d'];
   const r = await run(compose.bin, args, { cwd: repoDir });
@@ -424,6 +459,9 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('health:startDocker', async () => {
     try { return await startDocker(); } catch { return false; }
+  });
+  ipcMain.handle('health:startDockerAndWait', async () => {
+    try { return await startDockerAndWait(); } catch { return false; }
   });
   ipcMain.handle('health:composeUp', async () => {
     try { return await runComposeUp(); } catch (e) { return String(e); }

@@ -278,12 +278,25 @@
       $('btnStartVidria').addEventListener('click', async () => {
         // Si ya está corriendo, no hacer nada
         if ($('btnStartVidria').classList.contains('disabled')) return;
+        const btn = $('btnStartVidria');
+        const lbl = $('btnStartText');
+        const originalLabel = lbl ? lbl.textContent : '';
+        if (btn) btn.classList.add('disabled');
+        if (lbl) lbl.textContent = 'Iniciando...';
         $('statusNote').textContent = 'Iniciando Docker...';
-        await window.health.startDocker();
+        if (window.health.startDockerAndWait) {
+          await window.health.startDockerAndWait();
+        } else {
+          await window.health.startDocker();
+        }
         $('statusNote').textContent = 'Iniciando servicios...';
         await window.health.composeUp();
         $('statusNote').textContent = 'Servicios iniciados';
-        setTimeout(load, 4000);
+        setTimeout(() => {
+          if (btn) btn.classList.remove('disabled');
+          if (lbl) lbl.textContent = originalLabel || 'Iniciar Vidria';
+          load();
+        }, 4000);
       });
 
       const btnInst = document.getElementById('btnInstallDocker');

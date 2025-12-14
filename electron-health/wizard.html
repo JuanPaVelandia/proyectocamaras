@@ -352,9 +352,21 @@
 
       // AGENT screen
       $('btnStartVidria').addEventListener('click', async () => {
-        await window.health.startDocker();
-        await window.health.composeUp();
-        setTimeout(refreshStatus, 3500);
+        const btn = $('btnStartVidria');
+        const prevText = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
+        try {
+          if (window.health.startDockerAndWait) {
+            await window.health.startDockerAndWait();
+          } else {
+            await window.health.startDocker();
+            await new Promise((r) => setTimeout(r, 3000));
+          }
+          await window.health.composeUp();
+          setTimeout(refreshStatus, 3500);
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = prevText || 'Iniciar Vidria'; }
+        }
       });
       async function handleLogout() {
         // Clear auth/session on logout
