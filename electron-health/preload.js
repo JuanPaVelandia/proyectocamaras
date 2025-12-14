@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('health', {
   getStatus: () => ipcRenderer.invoke('health:getStatus'),
   startDocker: () => ipcRenderer.invoke('health:startDocker'),
   startDockerAndWait: () => ipcRenderer.invoke('health:startDockerAndWait'),
+  ensureDockerInstaller: () => ipcRenderer.invoke('health:ensureDockerInstaller'),
   composeUp: () => ipcRenderer.invoke('health:composeUp'),
   composeDown: () => ipcRenderer.invoke('health:composeDown'),
   installDocker: () => ipcRenderer.invoke('health:installDocker'),

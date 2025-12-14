@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const https = require('https');
 const { exec, spawn } = require('child_process');
 
 function getEnvWithPath() {
@@ -180,16 +181,65 @@ async function startDocker(opts = {}) {
   return r.code === 0;
 }
 
+async function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const tmp = `${dest}.download`;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    const file = fs.createWriteStream(tmp);
+    const handleError = (err) => {
+      try { file.close(); } catch {}
+      try { fs.unlinkSync(tmp); } catch {}
+      reject(err);
+    };
+    const request = https.get(url, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.destroy();
+        downloadFile(res.headers.location, dest).then(resolve).catch(reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        return handleError(new Error(`Fallo al descargar (${res.statusCode})`));
+      }
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close(() => {
+          try { fs.renameSync(tmp, dest); } catch (e) { return handleError(e); }
+          resolve(dest);
+        });
+      });
+    });
+    request.on('error', handleError);
+  });
+}
+
+async function ensureDockerInstaller() {
+  const platform = os.platform();
+  const repoDir = resolveRepoDir();
+  if (platform === 'darwin') {
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    const dmgPath = path.join(repoDir, 'mac', 'Docker.dmg');
+    if (exists(dmgPath)) return dmgPath;
+    const url = arch === 'arm64'
+      ? 'https://desktop.docker.com/mac/main/arm64/Docker.dmg'
+      : 'https://desktop.docker.com/mac/main/amd64/Docker.dmg';
+    return downloadFile(url, dmgPath);
+  }
+  if (platform === 'win32') {
+    const installer = path.join(repoDir, 'windows', 'Docker Desktop Installer.exe');
+    if (exists(installer)) return installer;
+    const url = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe';
+    return downloadFile(url, installer);
+  }
+  throw new Error('Descarga automA¡tica solo soportada en macOS y Windows');
+}
+
 async function installDockerMac() {
   const platform = os.platform();
   if (platform !== 'darwin') {
-    throw new Error('Instalación automática de Docker soportada solo en macOS');
+    throw new Error('InstalaciA3n automA�tica de Docker soportada solo en macOS');
   }
   const repoDir = resolveRepoDir();
-  const dmgPath = path.join(repoDir, 'mac', 'Docker.dmg');
-  if (!exists(dmgPath)) {
-    throw new Error(`No se encontró Docker.dmg en: ${dmgPath}`);
-  }
+  const dmgPath = await ensureDockerInstaller();
   // AppleScript con privilegios de administrador, usando archivo temporal para evitar errores de quoting
   const tmpScript = path.join(os.tmpdir(), `vidria_install_docker_${Date.now()}.applescript`);
   const asContent = `set dmgPath to "${dmgPath.replace(/"/g, '\"')}"
@@ -205,13 +255,8 @@ do shell script "/usr/bin/hdiutil detach /Volumes/Docker" with administrator pri
   await run('/usr/bin/open', ['-a', 'Docker'], { shell: false });
   return true;
 }
-
 async function installDockerWin() {
-  const repoDir = resolveRepoDir();
-  const installer = path.join(repoDir, 'windows', 'Docker Desktop Installer.exe');
-  if (!exists(installer)) {
-    throw new Error(`No se encontró el instalador en: ${installer}`);
-  }
+  const installer = await ensureDockerInstaller();
   const tmpScript = path.join(os.tmpdir(), `vidria_install_docker_${Date.now()}.ps1`);
   const safePath = installer.replace(/`/g, '``').replace(/"/g, '""');
   const ps = `
@@ -230,7 +275,6 @@ Start-Process -FilePath $installer -ArgumentList 'install --accept-license --alw
   }
   return true;
 }
-
 async function installDocker() {
   const platform = os.platform();
   if (platform === 'darwin') return installDockerMac();
@@ -469,6 +513,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('health:composeDown', async () => {
     try { return await runComposeDown(); } catch (e) { return String(e); }
   });
+  ipcMain.handle('health:ensureDockerInstaller', async () => {
+    try { return await ensureDockerInstaller(); } catch (e) { return String(e); }
+  });
   ipcMain.handle('health:installDocker', async () => {
     try { return await installDocker(); } catch (e) { return String(e); }
   });
@@ -496,3 +543,9 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+
+
+
+
+
