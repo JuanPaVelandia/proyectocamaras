@@ -372,8 +372,9 @@
         </div>
         <div id="stepsWrap" class="steps">
           <div id="badge1" class="stepBadge">1 • Login</div>
-          <div id="badge2" class="stepBadge">2 • Docker</div>
-          <div id="badge3" class="stepBadge">3 • Agente</div>
+          <div id="badge2" class="stepBadge">2 • Dependencias</div>
+          <div id="badge3" class="stepBadge">3 • Docker</div>
+          <div id="badge4" class="stepBadge">4 • Agente</div>
         </div>
         <div id="headerRight" style="display:flex; align-items:center; gap:10px;">
           <button id="btnLogoutTop" class="btn secondary" style="display:none;">Cerrar sesión</button>
@@ -404,8 +405,23 @@
             <div class="note">Tus credenciales se envían de forma segura al backend de Vidria.</div>
           </div>
 
-          <!-- Step 2: Docker install -->
+          <!-- Step 2: Descargar dependencias (packaged only) -->
           <div id="step2" style="display:none;">
+            <h2>Descargar dependencias</h2>
+            <p>Descargaremos los archivos necesarios para ejecutar Vidria (docker-compose, servicios y configuración).
+              Se guardarán en la carpeta de datos del usuario dentro de <span class="note">Vidria</span>.</p>
+            <div class="field">
+              <button id="btnDownloadDeps" class="btn">Descargar dependencias</button>
+              <span id="depsSpinner" class="loader" style="margin-left:10px; display:none;"></span>
+            </div>
+            <div class="progressWrap">
+              <div id="depsProgress" class="progress" style="width:0%"></div>
+            </div>
+            <div id="depsLabel" class="note" style="margin-top:8px;">Listo para descargar</div>
+          </div>
+
+          <!-- Step 3: Docker install -->
+          <div id="step3" style="display:none;">
             <h2>Instalar Docker</h2>
             <p>Necesitamos Docker para ejecutar los servicios locales (Frigate, Proxy, Listener y Mosquitto). Haz clic
               en instalar para continuar.</p>
@@ -419,8 +435,8 @@
             <div id="installLabel" class="note" style="margin-top:8px;">Listo para instalar</div>
           </div>
 
-          <!-- Step 3: Agent status -->
-          <div id="step3" style="display:none;">
+          <!-- Step 4: Agent status -->
+          <div id="step4" style="display:none;">
             <h2>Vidria Agent</h2>
             <p>Controla el estado de los servicios locales. Inicia el agente para poner todo a funcionar.</p>
             <div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -468,6 +484,7 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+    async function logMsg(m) { try { if (window.health && window.health.log) await window.health.log(m); } catch {} }
 
     // Auth storage
     const AUTH_TOKEN_KEY = 'VIDRIA_AUTH_TOKEN';
@@ -483,17 +500,27 @@
 
     // Progress helpers
     function setWizardProgress(pct) { const el = $('sideProgress'); if (el) el.style.width = pct + '%'; }
+    function badgeOrdinalFromStep(step) {
+      // Map step container number -> visible badge ordinal
+      if (PACKAGED) return step; // 1..4 visible
+      if (step === 1) return 1;   // Login
+      if (step === 3) return 2;   // Docker
+      if (step === 4) return 3;   // Agent
+      return 0;
+    }
     function setActiveBadge(step) {
-      ['badge1', 'badge2', 'badge3'].forEach((id, idx) => {
-        const el = $(id); if (!el) return; if (idx + 1 === step) el.classList.add('active'); else el.classList.remove('active');
-      });
+      const ids = ['badge1', 'badge2', 'badge3', 'badge4'];
+      const visible = ids.map(id => $(id)).filter(el => el && el.style.display !== 'none');
+      const ord = badgeOrdinalFromStep(step);
+      visible.forEach((el, idx) => { if (idx + 1 === ord) el.classList.add('active'); else el.classList.remove('active'); });
     }
     function showStep(step) {
-      ['step1', 'step2', 'step3'].forEach((id, idx) => { $(id).style.display = (idx + 1 === step) ? '' : 'none'; });
+      ['step1', 'step2', 'step3', 'step4'].forEach((id, idx) => { const el = $(id); if (!el) return; el.style.display = (idx + 1 === step) ? '' : 'none'; });
       setActiveBadge(step);
       if (step === 1) setWizardProgress(10);
-      if (step === 2) setWizardProgress(45);
-      if (step === 3) setWizardProgress(85);
+      if (step === 2) setWizardProgress(30);
+      if (step === 3) setWizardProgress(60);
+      if (step === 4) setWizardProgress(85);
       if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch { } }
     }
 
@@ -583,19 +610,55 @@
       if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch { } }
     }
 
-    async function initWizard() {
-      if (!isLoggedIn()) { showStep(1); return; }
+    let PACKAGED = false;
+    let DEPS_READY = false;
+    let DOCKER_STEP = 2;
+    let AGENT_STEP = 3;
 
-      // PROACTIVE FIX: Sync Customer ID from storage to .env on startup
-      const user = getStoredUser();
-      if (user && user.username) {
-        try { await window.health.setCustomerId(user.username); } catch { }
+    async function initWizard() {
+      const st = await window.health.getStatus();
+      PACKAGED = !!st.packaged;
+      DEPS_READY = !!(st.deps && st.deps.ready);
+
+      // Configure badges for packaged vs dev
+      if (PACKAGED) {
+        const b2 = $('badge2'); const b3 = $('badge3'); const b4 = $('badge4');
+        if (b2) b2.style.display = '';
+        if (b3) b3.style.display = '';
+        if (b4) b4.style.display = '';
+        DOCKER_STEP = 3; AGENT_STEP = 4;
+      } else {
+        const b2 = $('badge2'); const b4 = $('badge4'); const b3 = $('badge3');
+        if (b2) b2.style.display = 'none';
+        if (b3) b3.textContent = '2 • Docker';
+        if (b4) { b4.textContent = '3 • Agente'; b4.style.display = ''; }
+        DOCKER_STEP = 3; AGENT_STEP = 4;
       }
 
-      const st = await window.health.getStatus();
+      if (!isLoggedIn()) { showStep(1); return; }
+
+      // Sync Customer ID to compose (best-effort)
+      const user = getStoredUser();
+      if (user && user.username) { try { await window.health.setCustomerId(user.username); } catch { } }
+
+      // Packaged builds: ensure dependencies present before Docker step
+      if (PACKAGED && !DEPS_READY) {
+        await logMsg(`Paso2: dependencias faltantes. repoDir=${st.repoDir} yml=${st.repoDir}/docker-compose.client.yml`);
+        showStep(2); return;
+      }
+
+      if (PACKAGED && DEPS_READY) {
+        await logMsg(`Paso2: dependencias listas. repoDir=${st.repoDir} yml=${st.repoDir}/docker-compose.client.yml`);
+      }
+
       const dockerOk = !!(st.docker && st.docker.installed);
-      if (!dockerOk) { showStep(2); return; }
-      showStep(3); await refreshStatus();
+      const comp = st.compose || {}; const dk = st.docker || {};
+      if (!dockerOk) {
+        await logMsg(`Paso3: Docker NO detectado | platform=${st.platform} packaged=${st.packaged} repoDir=${st.repoDir} docker.bin=${dk.bin||''} docker.version=${dk.version||''} compose.installed=${comp.installed?'yes':'no'} compose.version=${comp.version||''} compose.bin=${comp.bin||''} compose.args=${(comp.args||[]).join(' ')}`);
+        showStep(DOCKER_STEP); return;
+      }
+      await logMsg(`Paso3: Docker detectado | platform=${st.platform} packaged=${st.packaged} repoDir=${st.repoDir} docker.bin=${dk.bin||''} docker.version=${dk.version||''} compose.installed=${comp.installed?'yes':'no'} compose.version=${comp.version||''} compose.bin=${comp.bin||''} compose.args=${(comp.args||[]).join(' ')}`);
+      showStep(AGENT_STEP); await refreshStatus();
     }
 
     // LOGIN
@@ -617,15 +680,65 @@
           const user = data?.user || (data?.username ? { username: data.username, email: data?.email || '' } : null);
           if (!token || !user) throw new Error('Respuesta inválida del servidor');
           setSession(token, user);
+          try { await logMsg(`Paso1: login exitoso usuario=${user?.username || username}`); } catch {}
           try { if (user?.username) await window.health.setCustomerId(user.username); } catch { }
           $('password').value = '';
           const st = await window.health.getStatus();
+          PACKAGED = !!st.packaged; DEPS_READY = !!(st.deps && st.deps.ready);
+          if (PACKAGED && !DEPS_READY) { await logMsg(`Paso2: dependencias faltantes. repoDir=${st.repoDir} yml=${st.repoDir}/docker-compose.client.yml`); showStep(2); return; }
+          if (PACKAGED && DEPS_READY) { await logMsg(`Paso2: dependencias listas. repoDir=${st.repoDir} yml=${st.repoDir}/docker-compose.client.yml`); }
+          const comp2 = st.compose || {}; const dk2 = st.docker || {};
+          const dockerOk2 = !!(st.docker && st.docker.installed);
+          if (!dockerOk2) {
+            await logMsg(`Paso3: Docker NO detectado | platform=${st.platform} packaged=${st.packaged} repoDir=${st.repoDir} docker.bin=${dk2.bin||''} docker.version=${dk2.version||''} compose.installed=${comp2.installed?'yes':'no'} compose.version=${comp2.version||''} compose.bin=${comp2.bin||''} compose.args=${(comp2.args||[]).join(' ')}`);
+          } else {
+            await logMsg(`Paso3: Docker detectado | platform=${st.platform} packaged=${st.packaged} repoDir=${st.repoDir} docker.bin=${dk2.bin||''} docker.version=${dk2.version||''} compose.installed=${comp2.installed?'yes':'no'} compose.version=${comp2.version||''} compose.bin=${comp2.bin||''} compose.args=${(comp2.args||[]).join(' ')}`);
+          }
           const dockerOk = !!(st.docker && st.docker.installed);
-          if (!dockerOk) showStep(2); else { showStep(3); await refreshStatus(); }
+          if (!dockerOk) showStep(DOCKER_STEP); else { showStep(AGENT_STEP); await refreshStatus(); }
         } catch (ex) {
           err.textContent = ex.message || 'No se pudo iniciar sesión'; err.style.display = '';
         } finally {
           btn.disabled = false; btn.textContent = orig;
+        }
+      });
+    }
+
+    // DEPENDENCIES (packaged)
+    const btnDeps = $('btnDownloadDeps');
+    const depsSpinner = $('depsSpinner');
+    const depsLabel = $('depsLabel');
+    const depsProgress = $('depsProgress');
+    if (btnDeps) {
+      btnDeps.addEventListener('click', async () => {
+        btnDeps.disabled = true; if (depsSpinner) depsSpinner.style.display = 'inline-block';
+        let pct = 5; const timer = setInterval(() => { pct = Math.min(pct + 4, 92); if (depsProgress) depsProgress.style.width = pct + '%'; }, 900);
+        if (depsLabel) depsLabel.textContent = 'Descargando dependencias...';
+        await logMsg('Paso2: iniciando descarga de dependencias');
+        const res = await window.health.downloadDependencies();
+        clearInterval(timer);
+        if (res === true) {
+          if (depsLabel) depsLabel.textContent = 'Dependencias listas'; if (depsProgress) depsProgress.style.width = '100%';
+          const st2 = await window.health.getStatus();
+          await logMsg(`Paso2: dependencias preparadas. repoDir=${st2.repoDir} yml=${st2.repoDir}/docker-compose.client.yml`);
+          // After unzip, ensure CUSTOMER_ID is written with current session user
+          const u = getStoredUser();
+          if (u && u.username) {
+            try { await window.health.setCustomerId(u.username); await logMsg(`Paso2: CUSTOMER_ID actualizado a ${u.username}`); } catch (e) { await logMsg(`Paso2: error al actualizar CUSTOMER_ID: ${e?.message||e}`); }
+          }
+          DEPS_READY = true;
+          const dockerOk = !!(st2.docker && st2.docker.installed);
+          // If Docker is already installed, skip install step
+          if (dockerOk) {
+            await logMsg('Paso2: Docker ya instalado, saltando paso de instalación');
+            showStep(AGENT_STEP);
+            await refreshStatus();
+          } else {
+            showStep(DOCKER_STEP);
+          }
+        } else {
+          if (depsLabel) depsLabel.textContent = (typeof res === 'string' ? res : 'Descarga finalizada');
+          btnDeps.disabled = false; if (depsSpinner) depsSpinner.style.display = 'none';
         }
       });
     }
@@ -640,6 +753,11 @@
         btnInst.disabled = true; installSpinner.style.display = 'inline-block';
         let pct = 5; const timer = setInterval(() => { pct = Math.min(pct + 3, 90); installProgress.style.width = pct + '%'; }, 1200);
         installLabel.textContent = 'Descargando e instalando Docker...';
+        try {
+          const st0 = await window.health.getStatus();
+          const comp0 = st0.compose || {}; const dk0 = st0.docker || {};
+          await logMsg(`Paso3: iniciar instalación de Docker | platform=${st0.platform} packaged=${st0.packaged} repoDir=${st0.repoDir} docker.bin=${dk0.bin||''} compose.bin=${comp0.bin||''} compose.args=${(comp0.args||[]).join(' ')}`);
+        } catch {}
         const res = await window.health.installDocker();
         clearInterval(timer);
         if (res === true) {
@@ -652,9 +770,15 @@
             await new Promise(r => setTimeout(r, 2000));
           }
           installProgress.style.width = '100%'; installLabel.textContent = ready ? 'Docker listo' : 'No se detectó Docker';
-          if (ready) { showStep(3); await refreshStatus(); }
+          try {
+            const st3 = await window.health.getStatus();
+            const comp3 = st3.compose || {}; const dk3 = st3.docker || {};
+            await logMsg(`Paso3: instalación finalizada | ready=${ready?'yes':'no'} platform=${st3.platform} packaged=${st3.packaged} repoDir=${st3.repoDir} docker.bin=${dk3.bin||''} docker.version=${dk3.version||''} compose.installed=${comp3.installed?'yes':'no'} compose.version=${comp3.version||''} compose.bin=${comp3.bin||''} compose.args=${(comp3.args||[]).join(' ')}`);
+          } catch {}
+          if (ready) { showStep(AGENT_STEP); await refreshStatus(); }
         } else {
           installLabel.textContent = (typeof res === 'string' ? res : 'Instalación finalizada');
+          await logMsg(`Paso3: error durante instalación de Docker | detalle=${typeof res==='string'?res:'desconocido'}`);
           btnInst.disabled = false; installSpinner.style.display = 'none';
         }
       });

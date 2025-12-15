@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('health', {
   composeUp: () => ipcRenderer.invoke('health:composeUp'),
   composeDown: () => ipcRenderer.invoke('health:composeDown'),
   installDocker: () => ipcRenderer.invoke('health:installDocker'),
+  downloadDependencies: () => ipcRenderer.invoke('health:downloadDependencies'),
+  log: (msg) => ipcRenderer.invoke('health:log', msg),
   setCustomerId: (id) => ipcRenderer.invoke('health:setCustomerId', id),
   clearCustomerId: () => ipcRenderer.invoke('health:clearCustomerId'),
   fitWindow: () => ipcRenderer.invoke('health:fitWindow'),

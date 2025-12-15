@@ -8,8 +8,14 @@ const { spawn } = require('child_process');
 // -- DEBUG LOGGING --
 function logDebug(msg) {
   try {
-    const logPath = path.join(__dirname, 'main-debug.log');
-    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
+    const dir = (typeof isPackaged === 'function' && isPackaged()) ? resolveUserDataDir() : __dirname;
+    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+    const line = `[${new Date().toISOString()}] ${msg}`;
+    // Echo to terminal for immediate visibility (npm start / npm run prod)
+    try { console.log(line); } catch {}
+    // Also persist to file for later debugging
+    const logPath = path.join(dir, 'main-debug.log');
+    fs.appendFileSync(logPath, line + '\n');
   } catch (e) { }
 }
 
@@ -34,17 +40,34 @@ function getEnvWithPath() {
 }
 
 function findDockerBin() {
-  if (os.platform() !== 'win32') return 'docker';
-  const candidates = [
-    'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe',
-    'C:\\ProgramData\\DockerDesktop\\version-bin\\docker.exe',
-    'docker',
-  ];
-  for (const c of candidates) {
-    try {
-      if (c === 'docker') return c;
-      if (fs.existsSync(c)) return c;
-    } catch { }
+  if (os.platform() === 'win32') {
+    const candidates = [
+      'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe',
+      'C:\\ProgramData\\DockerDesktop\\version-bin\\docker.exe',
+      'docker',
+    ];
+    for (const c of candidates) {
+      try {
+        if (c === 'docker') return c;
+        if (fs.existsSync(c)) return c;
+      } catch {}
+    }
+    return 'docker';
+  }
+  if (os.platform() === 'darwin') {
+    const candidates = [
+      '/usr/local/bin/docker',
+      '/opt/homebrew/bin/docker',
+      '/usr/bin/docker',
+      'docker',
+    ];
+    for (const c of candidates) {
+      try {
+        if (c === 'docker') return c;
+        if (fs.existsSync(c)) return c;
+      } catch {}
+    }
+    return 'docker';
   }
   return 'docker';
 }
@@ -105,21 +128,6 @@ async function waitForDockerReady(timeoutMs = 120000) {
 }
 
 // -- MAIN LOGIC --
-function resolveRepoDir() {
-  if (process.env.VIDRIA_REPO_DIR && fs.existsSync(process.env.VIDRIA_REPO_DIR)) {
-    return process.env.VIDRIA_REPO_DIR;
-  }
-  // Try to find docker-compose.client.yml up the tree
-  let current = __dirname;
-  for (let i = 0; i < 5; i++) {
-    const candidate = path.join(current, 'docker-compose.client.yml');
-    if (fs.existsSync(candidate)) return current;
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return __dirname;
-}
 
 async function getContainerState(name) {
   const dockerBin = findDockerBin();
@@ -141,6 +149,8 @@ ipcMain.handle('health:getStatus', async () => {
     const dockerVer = await getDockerVersion();
     const composeInfo = await detectComposeCmd();
     const repoDir = resolveRepoDir();
+    const depsReady = fs.existsSync(path.join(repoDir, 'docker-compose.client.yml'));
+    const dockerBin = findDockerBin();
 
     const services = {};
     const wanted = ['frigate', 'frigate_listener', 'frigate_proxy', 'mosquitto'];
@@ -154,9 +164,11 @@ ipcMain.handle('health:getStatus', async () => {
 
     return {
       platform: os.platform(),
+      packaged: isPackaged(),
       repoDir,
-      docker: { installed: !!dockerVer, version: dockerVer },
-      compose: { installed: !!composeInfo.bin, version: composeInfo.version },
+      docker: { installed: !!dockerVer, version: dockerVer, bin: dockerBin },
+      compose: { installed: !!composeInfo.bin, version: composeInfo.version, bin: composeInfo.bin, args: composeInfo.args },
+      deps: { ready: depsReady },
       services
     };
   } catch (e) {
@@ -364,49 +376,105 @@ ipcMain.handle('health:installDocker', async () => {
     return String(e.message || e);
   }
 });
-ipcMain.handle('health:setCustomerId', async (ev, id) => {
-  try {
-    const repoDir = resolveRepoDir();
-    const yamlPath = path.join(repoDir, 'docker-compose.client.yml');
-    logDebug(`Setting Customer ID (${id}) in ${yamlPath}`);
+ipcMain.handle('health:log', async (_ev, msg) => { try { logDebug(`[WIZARD] ${String(msg)}`); } catch {} return true; });
 
-    if (!fs.existsSync(yamlPath)) {
-      logDebug('YAML file not found');
-      return;
+// Robust CUSTOMER_ID injection into docker-compose.client.yml
+function updateCustomerIdInCompose(newId) {
+  const repoDir = resolveRepoDir();
+  const composePath = path.join(repoDir, 'docker-compose.client.yml');
+  logDebug(`updateCustomerIdInCompose: repoDir=${repoDir}, composePath=${composePath}, newId=${newId ?? '(clear)'}`);
+  if (!fs.existsSync(composePath)) {
+    throw new Error(`No se encontró docker-compose.client.yml en ${repoDir}`);
+  }
+  const original = fs.readFileSync(composePath, 'utf8');
+  const lines = original.split(/\r?\n/);
+
+  // Find 'listener:' service block
+  const svcIdx = lines.findIndex((l) => /^\s*listener\s*:\s*$/.test(l));
+  if (svcIdx === -1) throw new Error('Servicio "listener" no encontrado en docker-compose.client.yml');
+  const svcIndent = (lines[svcIdx].match(/^\s*/)||[''])[0].length;
+  // Find end of service block: next line starting with same indent and ending with ':'
+  let endIdx = lines.length;
+  for (let i = svcIdx + 1; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)([A-Za-z0-9_-]+)\s*:\s*$/);
+    if (!m) continue;
+    const indent = m[1].length;
+    if (indent === svcIndent) { endIdx = i; break; }
+  }
+
+  // Search for environment block within [svcIdx+1, endIdx)
+  let envIdx = -1;
+  let envIndent = null;
+  for (let i = svcIdx + 1; i < endIdx; i++) {
+    const m = lines[i].match(/^(\s*)environment\s*:\s*$/);
+    if (m) { envIdx = i; envIndent = m[1].length; break; }
+  }
+
+  function ensureEnvBlockInserted() {
+    // Insert an environment: block before networks: (if present) or before endIdx
+    let insertAt = -1;
+    for (let i = svcIdx + 1; i < endIdx; i++) {
+      if (/^\s*networks\s*:\s*$/.test(lines[i])) { insertAt = i; break; }
     }
+    if (insertAt === -1) insertAt = endIdx;
+    const baseIndent = ' '.repeat(svcIndent + 2);
+    const itemIndent = ' '.repeat(svcIndent + 4);
+    const toInsert = [ `${baseIndent}environment:`, `${itemIndent}- CUSTOMER_ID=${newId}` ];
+    lines.splice(insertAt, 0, ...toInsert);
+    return { envIdx: insertAt, envIndent: svcIndent + 2 };
+  }
 
-    let content = fs.readFileSync(yamlPath, 'utf8');
-
-    // Legacy method: Inject directly into environment list in YAML
-    // Check if CUSTOMER_ID line exists
-    if (content.match(/- CUSTOMER_ID=/)) {
-      content = content.replace(/- CUSTOMER_ID=.*$/, `- CUSTOMER_ID=${id}`);
+  if (newId && typeof newId === 'string') {
+    // Set or update CUSTOMER_ID
+    if (envIdx === -1) {
+      const res = ensureEnvBlockInserted();
+      envIdx = res.envIdx; envIndent = res.envIndent;
     } else {
-      // Find the CLOUD_API_KEY line (last known env var) and append after it
-      const anchor = '- CLOUD_API_KEY=';
-      const idx = content.indexOf(anchor);
-      if (idx !== -1) {
-        // Find end of that line
-        const endOfLine = content.indexOf('\n', idx);
-        if (endOfLine !== -1) {
-          const prefix = content.substring(0, endOfLine + 1);
-          const suffix = content.substring(endOfLine + 1);
-          // Match indentation of the anchor line
-          const lineStart = content.lastIndexOf('\n', idx) + 1;
-          const indentation = content.substring(lineStart, idx);
-
-          content = prefix + indentation + `- CUSTOMER_ID=${id}\n` + suffix;
+      // Look for existing CUSTOMER_ID item under environment list
+      const envListIndent = envIndent + 2;
+      let found = false;
+      let insertAfter = envIdx;
+      for (let i = envIdx + 1; i < endIdx; i++) {
+        const line = lines[i];
+        const indent = (line.match(/^\s*/)||[''])[0].length;
+        if (indent <= envIndent) break; // end of environment list
+        if (/^\s*-\s*CUSTOMER_ID\s*=/.test(line)) {
+          lines[i] = `${' '.repeat(envListIndent)}- CUSTOMER_ID=${newId}`;
+          found = true;
+          break;
         }
+        insertAfter = i; // track last env item
+      }
+      if (!found) {
+        const insertPos = insertAfter === envIdx ? envIdx + 1 : insertAfter + 1;
+        lines.splice(insertPos, 0, `${' '.repeat(envListIndent)}- CUSTOMER_ID=${newId}`);
       }
     }
-
-    fs.writeFileSync(yamlPath, content, 'utf8');
-    logDebug('Saved docker-compose.client.yml');
-  } catch (e) {
-    logDebug(`setCustomerId error: ${e.message}`);
+  } else {
+    // Clear CUSTOMER_ID line if present
+    if (envIdx !== -1) {
+      for (let i = envIdx + 1; i < endIdx; i++) {
+        const line = lines[i];
+        const indent = (line.match(/^\s*/)||[''])[0].length;
+        if (indent <= envIndent) break;
+        if (/^\s*-\s*CUSTOMER_ID\s*=/.test(line)) { lines.splice(i, 1); break; }
+      }
+    }
   }
+
+  const updated = lines.join('\n');
+  if (updated !== original) {
+    fs.writeFileSync(composePath, updated, 'utf8');
+    logDebug(`docker-compose.client.yml actualizado con CUSTOMER_ID=${newId ?? '(clear)'} en ${composePath}`);
+  } else {
+    logDebug('docker-compose.client.yml sin cambios tras intentar actualizar CUSTOMER_ID');
+  }
+  return true;
+}
+ipcMain.handle('health:setCustomerId', async (_ev, id) => {
+  try { return await updateCustomerIdInCompose(id); } catch (e) { logDebug(`setCustomerId error: ${e.message}`); return String(e.message || e); }
 });
-ipcMain.handle('health:clearCustomerId', async () => { });
+ipcMain.handle('health:clearCustomerId', async () => { try { return await updateCustomerIdInCompose(null); } catch (e) { logDebug(`clearCustomerId error: ${e.message}`); return String(e.message || e); } });
 ipcMain.handle('health:fitWindow', async () => {
   try {
     const win = BrowserWindow.getAllWindows()[0];
@@ -419,6 +487,131 @@ ipcMain.handle('health:fitWindow', async () => {
   } catch (e) {
     logDebug(`fitWindow error: ${e.message}`);
     return false;
+  }
+});
+
+// ---- Dependencies download (packaged builds) ----
+function resolveUserDataDir() {
+  const base = path.join(app.getPath('userData'), 'Vidria');
+  try { fs.mkdirSync(base, { recursive: true }); } catch {}
+  return base;
+}
+
+function isPackaged() { return !!app.isPackaged || process.argv.includes('--prod') || process.env.VIDRIA_FORCE_PROD === '1'; }
+
+function resolveRepoDir() {
+  // In packaged builds, always use userData/Vidria
+  if (isPackaged()) {
+    return resolveUserDataDir();
+  }
+  if (process.env.VIDRIA_REPO_DIR && fs.existsSync(process.env.VIDRIA_REPO_DIR)) {
+    return process.env.VIDRIA_REPO_DIR;
+  }
+  // Try to find docker-compose.client.yml up the tree
+  let current = __dirname;
+  for (let i = 0; i < 5; i++) {
+    const candidate = path.join(current, 'docker-compose.client.yml');
+    if (fs.existsSync(candidate)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return __dirname;
+}
+
+async function unzipToDir(zipPath, destDir) {
+  try { fs.mkdirSync(destDir, { recursive: true }); } catch {}
+  if (os.platform() === 'win32') {
+    // Use a temporary PowerShell script for robustness and proper quoting
+    const tmp = path.join(os.tmpdir(), `vidria_unzip_${Date.now()}.ps1`);
+    const zipEsc = zipPath.replace(/`/g, '``').replace(/"/g, '""');
+    const destEsc = destDir.replace(/`/g, '``').replace(/"/g, '""');
+    const ps = `
+$ErrorActionPreference = 'Stop'
+$zip = "${zipEsc}"
+$dest = "${destEsc}"
+if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Force -Path $dest | Out-Null }
+try {
+  Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
+} catch {
+  try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $tmp = Join-Path $dest 'tmp_extract'
+    if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $tmp)
+    Copy-Item -Path (Join-Path $tmp '*') -Destination $dest -Recurse -Force
+    Remove-Item -Recurse -Force $tmp
+  } catch {
+    Write-Error $_
+    exit 1
+  }
+}
+exit 0
+`;
+    fs.writeFileSync(tmp, ps, 'utf8');
+    const r = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-File', tmp], { windowsHide: true, shell: false });
+    try { fs.unlinkSync(tmp); } catch {}
+    if (r.code === 0) return true;
+    logDebug(`unzipToDir PS error: code=${r.code} err=${r.err.substring(0,200)}`);
+    return false;
+  } else if (os.platform() === 'darwin') {
+    // Prefer ditto on macOS
+    let r = await run('/usr/bin/ditto', ['-x', '-k', zipPath, destDir], { shell: false });
+    if (r.code === 0) return true;
+    logDebug(`ditto unzip failed: ${r.err || r.out}`);
+    // Fallback to unzip
+    r = await run('/usr/bin/unzip', ['-o', zipPath, '-d', destDir], { shell: false });
+    if (r.code === 0) return true;
+    logDebug(`unzip fallback failed: ${r.err || r.out}`);
+    return false;
+  } else {
+    // Linux/unix
+    const r = await run('unzip', ['-o', zipPath, '-d', destDir]);
+    return r.code === 0;
+  }
+}
+
+function flattenSingleSubdir(dir) {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    if (!entries) return;
+    // If compose already at root, nothing to do
+    if (fs.existsSync(path.join(dir, 'docker-compose.client.yml'))) return;
+    const subdirs = entries.filter((e) => e.isDirectory());
+    if (subdirs.length !== 1) return;
+    const sub = path.join(dir, subdirs[0].name);
+    const subEntries = fs.readdirSync(sub);
+    for (const name of subEntries) {
+      const from = path.join(sub, name);
+      const to = path.join(dir, name);
+      try { fs.renameSync(from, to); } catch (e) { logDebug(`flatten move error: ${e.message}`); }
+    }
+    try { fs.rmdirSync(sub); } catch {}
+  } catch (e) {
+    logDebug(`flatten error: ${e.message}`);
+  }
+}
+
+ipcMain.handle('health:downloadDependencies', async () => {
+  try {
+    const dest = resolveUserDataDir();
+    const composeAt = path.join(dest, 'docker-compose.client.yml');
+    if (fs.existsSync(composeAt)) return true; // already ready
+    const zipUrl = 'https://github.com/JuanPaVelandia/proyectocamaras/archive/refs/tags/1.1.zip';
+    const zipPath = path.join(dest, 'vidria-deps.zip');
+    await downloadFile(zipUrl, zipPath);
+    const ok = await unzipToDir(zipPath, dest);
+    if (!ok) throw new Error('No se pudo extraer el ZIP');
+    try { fs.unlinkSync(zipPath); } catch {}
+    // If extracted into a nested folder, flatten
+    flattenSingleSubdir(dest);
+    // Validate
+    if (!fs.existsSync(composeAt)) throw new Error('Dependencias descargadas, pero falta docker-compose.client.yml');
+    return true;
+  } catch (e) {
+    logDebug(`downloadDependencies error: ${e.message}`);
+    return String(e.message || e);
   }
 });
 
