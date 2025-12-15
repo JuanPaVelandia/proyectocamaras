@@ -1,408 +1,720 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://proyectocamaras-production.up.railway.app" />
-    <title>Vidria Setup</title>
-    <script src="node_modules/lottie-web/build/player/lottie.min.js"></script>
-    <style>
-      :root {
-        --bg: #ffffff;
-        --card: #ffffff;
-        --card-2: #ffffff;
-        --fg: #0f172a;
-        --muted: #64748b;
-        --border: #e5e7eb;
-        --accent: #7c3aed;
-        --accent2: #22c55e;
-        --warn: #f59e0b;
-        --err: #ef4444;
-        --blue: #2563eb;
+
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'unsafe-inline' 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://proyectocamaras-production.up.railway.app" />
+  <title>Vidria Setup</title>
+  <script src="node_modules/lottie-web/build/player/lottie.min.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card: #ffffff;
+      --card-2: #ffffff;
+      --fg: #0f172a;
+      --muted: #64748b;
+      --border: #e5e7eb;
+      --accent: #7c3aed;
+      --accent2: #22c55e;
+      --warn: #f59e0b;
+      --err: #ef4444;
+      --blue: #2563eb;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      color: var(--fg);
+      background: var(--bg);
+    }
+
+    .wrap {
+      width: 100%;
+      padding: 0;
+      margin: 0;
+    }
+
+    .wizard {
+      background: var(--card);
+      border: 0;
+      border-radius: 0;
+      width: 100%;
+      height: auto;
+      overflow: hidden;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand img {
+      height: 32px;
+      width: auto;
+      border-radius: 0;
+      object-fit: contain;
+      display: block;
+    }
+
+    .brand .title {
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+
+    .progressBar {
+      position: relative;
+      height: 10px;
+      background: #f1f5f9;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .progressInner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #06b6d4);
+      transition: width .4s ease;
+    }
+
+    .steps {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .stepBadge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      background: #f8fafc;
+    }
+
+    .stepBadge.active {
+      color: #111827;
+      border-color: #c4b5fd;
+      background: #ede9fe;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 18px;
+      padding: 18px 20px;
+    }
+
+    .panel {
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .side {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    p {
+      color: var(--muted);
+      margin: 8px 0 16px;
+      line-height: 1.6;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 10px 0 14px;
+    }
+
+    .label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .input {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--fg);
+      outline: none;
+    }
+
+    .input:focus {
+      border-color: #7c3aed;
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, .18);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, var(--accent), #06b6d4);
+      color: white;
+      border: 0;
+      padding: 12px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: 0 8px 22px rgba(124, 58, 237, .25);
+      transition: transform .15s ease, box-shadow .22s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(124, 58, 237, .35);
+    }
+
+    .btn.secondary {
+      background: #0ea5e9;
+      box-shadow: 0 8px 20px rgba(14, 165, 233, .25);
+    }
+
+    .btn.ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+    }
+
+    .btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+      filter: grayscale(.2);
+    }
+
+    .btn.circle {
+      width: 160px;
+      height: 160px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .error {
+      color: var(--err);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .statusDot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .dot-ok {
+      background: #16a34a;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, .35);
+      animation: pulseOk 1.8s infinite;
+    }
+
+    .dot-bad {
+      background: #ef4444;
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, .35);
+      animation: pulseBad 1.8s infinite;
+    }
+
+    @keyframes pulseOk {
+      0% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, .45)
       }
-      html, body { height: 100%; }
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        margin: 0; color: var(--fg); background: var(--bg);
+
+      70% {
+        box-shadow: 0 0 0 10px rgba(34, 197, 94, 0)
       }
-      .wrap { width: 100%; padding: 0; margin: 0; }
-      .wizard { background: var(--card); border: 0; border-radius: 0; width: 100%; height: auto; overflow: hidden; box-shadow: none; display:flex; flex-direction: column; }
-      .header { padding: 16px 20px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
-      .brand { display:flex; align-items:center; gap: 12px; }
-      .brand img { height: 32px; width: auto; border-radius: 0; object-fit: contain; display: block; }
-      .brand .title { font-weight: 700; letter-spacing: .2px; }
-      .progressBar { position: relative; height: 10px; background: #f1f5f9; border-radius: 999px; border:1px solid var(--border); overflow: hidden; }
-      .progressInner { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #06b6d4); transition: width .4s ease; }
-      .steps { display:flex; gap: 10px; align-items:center; }
-      .stepBadge { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius: 999px; border:1px solid var(--border); color: var(--muted); font-size: 12px; background: #f8fafc; }
-      .stepBadge.active { color: #111827; border-color: #c4b5fd; background: #ede9fe; }
-      .content { display:grid; grid-template-columns: 1fr 340px; gap: 18px; padding: 18px 20px; }
-      .panel { background: var(--card-2); border:1px solid var(--border); border-radius: 12px; padding: 20px; }
-      .side { background: var(--card); border:1px solid var(--border); border-radius: 12px; padding: 16px; display:flex; flex-direction:column; }
-      h2 { margin: 0 0 8px; font-size: 20px; }
-      p { color: var(--muted); margin: 8px 0 16px; line-height: 1.6; }
-      .field { display:flex; flex-direction:column; gap:6px; margin: 10px 0 14px; }
-      .label { font-size: 13px; color: var(--muted); }
-      .input { padding: 12px; border-radius: 12px; border:1px solid var(--border); background:#ffffff; color: var(--fg); outline:none; }
-      .input:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,.18); }
-      .btn { background: linear-gradient(135deg, var(--accent), #06b6d4); color: white; border: 0; padding: 12px 16px; border-radius: 12px; cursor: pointer; font-weight:600;
-             box-shadow: 0 8px 22px rgba(124,58,237,.25); transition: transform .15s ease, box-shadow .22s ease; }
-      .btn:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(124,58,237,.35); }
-      .btn.secondary { background: #0ea5e9; box-shadow: 0 8px 20px rgba(14,165,233,.25); }
-      .btn.ghost { background: transparent; border:1px solid var(--border); color: var(--fg); }
-      .btn:disabled { opacity: .6; cursor: not-allowed; filter: grayscale(.2); }
-      .btn.circle { width: 160px; height: 160px; border-radius: 9999px; display:flex; align-items:center; justify-content:center; font-size: 16px; font-weight: 700; padding: 0; }
-      .error { color: var(--err); font-size: 13px; margin-top: 6px; }
-      .note { font-size: 13px; color: var(--muted); }
-      .statusDot { width: 12px; height: 12px; border-radius: 999px; display:inline-block; margin-right:8px; }
-      .dot-ok { background: #16a34a; box-shadow: 0 0 0 0 rgba(34,197,94,.35); animation: pulseOk 1.8s infinite; }
-      .dot-bad { background: #ef4444; box-shadow: 0 0 0 0 rgba(239,68,68,.35); animation: pulseBad 1.8s infinite; }
-      @keyframes pulseOk { 0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)} 70%{box-shadow:0 0 0 10px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
-      @keyframes pulseBad { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)} 70%{box-shadow:0 0 0 10px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
-      .loader { width: 18px; height: 18px; border: 3px solid rgba(148,163,184,.25); border-top-color: #7c3aed; border-radius: 50%; animation: spin 1s linear infinite; display:inline-block; }
-      @keyframes spin { to{ transform: rotate(360deg); } }
-      .progressWrap { height: 10px; background:#f8fafc; border:1px solid var(--border); border-radius: 999px; overflow:hidden; }
-      .progress { height: 100%; width: 0%; background: linear-gradient(90deg, #10b981, #22d3ee); transition: width .3s ease; }
-      .details { display:none; margin-top: 10px; border-top:1px dashed var(--border); padding-top: 12px; }
-      #lottieWrap { display:flex; align-items:center; justify-content:center; flex: 1; }
-      #lottieContainer { width: 100%; max-width: 320px; height: 240px; }
-      #tipsWrap { margin-top: auto; }
-      #runStatusWrap { display:flex; align-items:center; justify-content:center; gap: 8px; white-space: nowrap; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="wizard">
-        <div class="header">
-          <div class="brand">
-            <img src="logo.png" alt="Vidria" />
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0)
+      }
+    }
+
+    @keyframes pulseBad {
+      0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, .45)
+      }
+
+      70% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0)
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0)
+      }
+    }
+
+    .loader {
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(148, 163, 184, .25);
+      border-top-color: #7c3aed;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .progressWrap {
+      height: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981, #22d3ee);
+      transition: width .3s ease;
+    }
+
+    .details {
+      display: none;
+      margin-top: 10px;
+      border-top: 1px dashed var(--border);
+      padding-top: 12px;
+    }
+
+    #lottieWrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+    }
+
+    #lottieContainer {
+      width: 100%;
+      max-width: 320px;
+      height: 240px;
+    }
+
+    #tipsWrap {
+      margin-top: auto;
+    }
+
+    #runStatusWrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="wizard">
+      <div class="header">
+        <div class="brand">
+          <img src="logo.png" alt="Vidria" />
+        </div>
+        <div id="stepsWrap" class="steps">
+          <div id="badge1" class="stepBadge">1 • Login</div>
+          <div id="badge2" class="stepBadge">2 • Docker</div>
+          <div id="badge3" class="stepBadge">3 • Agente</div>
+        </div>
+        <div id="headerRight" style="display:flex; align-items:center; gap:10px;">
+          <button id="btnLogoutTop" class="btn secondary" style="display:none;">Cerrar sesión</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="panel">
+          <!-- Step 1: Login -->
+          <div id="step1">
+            <h2>Inicia sesión en tu cuenta Vidria</h2>
+            <p>Necesitamos que inicies sesión para asociar este equipo a tu cuenta y configurar los servicios locales.
+            </p>
+            <form id="loginForm" autocomplete="on">
+              <div class="field">
+                <label class="label" for="username">Usuario</label>
+                <input id="username" name="username" class="input" placeholder="ej: juanpavelandia" />
+              </div>
+              <div class="field">
+                <label class="label" for="password">Contraseña</label>
+                <input type="password" id="password" name="password" class="input" placeholder="••••••••" />
+              </div>
+              <div class="field">
+                <button id="btnLogin" class="btn" type="submit">Ingresar</button>
+              </div>
+              <div id="loginError" class="error" style="display:none;"></div>
+            </form>
+            <div class="note">Tus credenciales se envían de forma segura al backend de Vidria.</div>
           </div>
-          <div id="stepsWrap" class="steps">
-            <div id="badge1" class="stepBadge">1 • Login</div>
-            <div id="badge2" class="stepBadge">2 • Docker</div>
-            <div id="badge3" class="stepBadge">3 • Agente</div>
+
+          <!-- Step 2: Docker install -->
+          <div id="step2" style="display:none;">
+            <h2>Instalar Docker</h2>
+            <p>Necesitamos Docker para ejecutar los servicios locales (Frigate, Proxy, Listener y Mosquitto). Haz clic
+              en instalar para continuar.</p>
+            <div class="field">
+              <button id="btnInstallDocker" class="btn">Instalar Docker</button>
+              <span id="installSpinner" class="loader" style="margin-left:10px; display:none;"></span>
+            </div>
+            <div class="progressWrap">
+              <div id="installProgress" class="progress" style="width:0%"></div>
+            </div>
+            <div id="installLabel" class="note" style="margin-top:8px;">Listo para instalar</div>
           </div>
-          <div id="headerRight" style="display:flex; align-items:center; gap:10px;">
-            <button id="btnLogoutTop" class="btn secondary" style="display:none;">Cerrar sesión</button>
+
+          <!-- Step 3: Agent status -->
+          <div id="step3" style="display:none;">
+            <h2>Vidria Agent</h2>
+            <p>Controla el estado de los servicios locales. Inicia el agente para poner todo a funcionar.</p>
+            <div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button id="btnStartVidria" class="btn" style="min-width:180px;">Iniciar Vidria</button>
+              <button id="btnLogout" class="btn secondary" style="margin-left:auto;">Cerrar sesión</button>
+            </div>
+            <div id="details" style="display:block;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Servicio</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="svcTable"></tbody>
+              </table>
+              <div id="dockerInfo" class="note" style="margin-top:8px;"></div>
+            </div>
           </div>
         </div>
 
-        <div class="content">
-          <div class="panel">
-            <!-- Step 1: Login -->
-            <div id="step1">
-              <h2>Inicia sesión en tu cuenta Vidria</h2>
-              <p>Necesitamos que inicies sesión para asociar este equipo a tu cuenta y configurar los servicios locales.</p>
-              <form id="loginForm" autocomplete="on">
-                <div class="field">
-                  <label class="label" for="username">Usuario</label>
-                  <input id="username" name="username" class="input" placeholder="ej: juanpavelandia" />
-                </div>
-                <div class="field">
-                  <label class="label" for="password">Contraseña</label>
-                  <input type="password" id="password" name="password" class="input" placeholder="••••••••" />
-                </div>
-                <div class="field">
-                  <button id="btnLogin" class="btn" type="submit">Ingresar</button>
-                </div>
-                <div id="loginError" class="error" style="display:none;"></div>
-              </form>
-              <div class="note">Tus credenciales se envían de forma segura al backend de Vidria.</div>
-            </div>
-
-            <!-- Step 2: Docker install -->
-            <div id="step2" style="display:none;">
-              <h2>Instalar Docker</h2>
-              <p>Necesitamos Docker para ejecutar los servicios locales (Frigate, Proxy, Listener y Mosquitto). Haz clic en instalar para continuar.</p>
-              <div class="field">
-                <button id="btnInstallDocker" class="btn">Instalar Docker</button>
-                <span id="installSpinner" class="loader" style="margin-left:10px; display:none;"></span>
-              </div>
-              <div class="progressWrap"><div id="installProgress" class="progress" style="width:0%"></div></div>
-              <div id="installLabel" class="note" style="margin-top:8px;">Listo para instalar</div>
-            </div>
-
-            <!-- Step 3: Agent status -->
-            <div id="step3" style="display:none;">
-              <h2>Vidria Agent</h2>
-              <p>Controla el estado de los servicios locales. Inicia el agente para poner todo a funcionar.</p>
-              <div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button id="btnStartVidria" class="btn" style="min-width:180px;">Iniciar Vidria</button>
-                <button id="btnLogout" class="btn secondary" style="margin-left:auto;">Cerrar sesión</button>
-              </div>
-              <div id="details" style="display:block;">
-                <table>
-                  <thead><tr><th>Servicio</th><th>Estado</th></tr></thead>
-                  <tbody id="svcTable"></tbody>
-                </table>
-                <div id="dockerInfo" class="note" style="margin-top:8px;"></div>
-              </div>
-            </div>
+        <div class="side">
+          <div id="sideProgressWrap" class="progressWrap">
+            <div id="sideProgress" class="progress" style="width:0%"></div>
           </div>
-
-          <div class="side">
-            <div id="sideProgressWrap" class="progressWrap"><div id="sideProgress" class="progress" style="width:0%"></div></div>
-            <div id="runStatusWrap" style="display:none; margin-top:12px;">
-              <span id="overallDot" class="statusDot"></span>
-              <div id="overallText" style="font-weight:600;">Comprobando...</div>
-            </div>
-            <div id="lottieWrap" style="display:none;">
-              <div id="lottieContainer" style="width:100%; height:240px;"></div>
-            </div>
-            <div id="tipsWrap" style="margin-top: 18px;">
-              <div class="note">Consejos</div>
-              <ul style="margin:8px 0 0 16px; color: var(--muted); line-height:1.6;">
-                <li>Asegúrate de tener conexión a Internet.</li>
-                <li>En macOS, Docker Desktop se abrirá automáticamente.</li>
-                <li>Puedes volver a abrir este asistente cuando quieras.</li>
-              </ul>
-            </div>
+          <div id="runStatusWrap" style="display:none; margin-top:12px;">
+            <span id="overallDot" class="statusDot"></span>
+            <div id="overallText" style="font-weight:600;">Comprobando...</div>
+          </div>
+          <div id="lottieWrap" style="display:none;">
+            <div id="lottieContainer" style="width:100%; height:240px;"></div>
+          </div>
+          <div id="tipsWrap" style="margin-top: 18px;">
+            <div class="note">Consejos</div>
+            <ul style="margin:8px 0 0 16px; color: var(--muted); line-height:1.6;">
+              <li>Asegúrate de tener conexión a Internet.</li>
+              <li>En macOS, Docker Desktop se abrirá automáticamente.</li>
+              <li>Puedes volver a abrir este asistente cuando quieras.</li>
+            </ul>
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <script>
-      const $ = (id) => document.getElementById(id);
+  <script>
+    const $ = (id) => document.getElementById(id);
 
-      // Auth storage
-      const AUTH_TOKEN_KEY = 'VIDRIA_AUTH_TOKEN';
-      const AUTH_USER_KEY = 'VIDRIA_AUTH_USER';
-      function getStoredUser() { try { const u = localStorage.getItem(AUTH_USER_KEY); return u ? JSON.parse(u) : null; } catch { return null; } }
-      function getStoredToken() { try { return localStorage.getItem(AUTH_TOKEN_KEY) || null; } catch { return null; } }
-      function isLoggedIn() { return !!getStoredToken(); }
-      function setSession(token, user) { localStorage.setItem(AUTH_TOKEN_KEY, token); if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); }
-      function clearSession() { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(AUTH_USER_KEY); }
+    // Auth storage
+    const AUTH_TOKEN_KEY = 'VIDRIA_AUTH_TOKEN';
+    const AUTH_USER_KEY = 'VIDRIA_AUTH_USER';
+    function getStoredUser() { try { const u = localStorage.getItem(AUTH_USER_KEY); return u ? JSON.parse(u) : null; } catch { return null; } }
+    function getStoredToken() { try { return localStorage.getItem(AUTH_TOKEN_KEY) || null; } catch { return null; } }
+    function isLoggedIn() { return !!getStoredToken(); }
+    function setSession(token, user) { localStorage.setItem(AUTH_TOKEN_KEY, token); if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); }
+    function clearSession() { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(AUTH_USER_KEY); }
 
-      // Backend URL (fixed for this app)
-      const LOGIN_URL = 'https://proyectocamaras-production.up.railway.app/api/auth/login';
+    // Backend URL (fixed for this app)
+    const LOGIN_URL = 'https://proyectocamaras-production.up.railway.app/api/auth/login';
 
-      // Progress helpers
-      function setWizardProgress(pct) { const el = $('sideProgress'); if (el) el.style.width = pct + '%'; }
-      function setActiveBadge(step) {
-        ['badge1','badge2','badge3'].forEach((id, idx) => {
-          const el = $(id); if (!el) return; if (idx+1 === step) el.classList.add('active'); else el.classList.remove('active');
-        });
-      }
-      function showStep(step) {
-        ['step1','step2','step3'].forEach((id, idx) => { $(id).style.display = (idx+1 === step) ? '' : 'none'; });
-        setActiveBadge(step);
-        if (step === 1) setWizardProgress(10);
-        if (step === 2) setWizardProgress(45);
-        if (step === 3) setWizardProgress(85);
-        if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch {} }
-      }
+    // Progress helpers
+    function setWizardProgress(pct) { const el = $('sideProgress'); if (el) el.style.width = pct + '%'; }
+    function setActiveBadge(step) {
+      ['badge1', 'badge2', 'badge3'].forEach((id, idx) => {
+        const el = $(id); if (!el) return; if (idx + 1 === step) el.classList.add('active'); else el.classList.remove('active');
+      });
+    }
+    function showStep(step) {
+      ['step1', 'step2', 'step3'].forEach((id, idx) => { $(id).style.display = (idx + 1 === step) ? '' : 'none'; });
+      setActiveBadge(step);
+      if (step === 1) setWizardProgress(10);
+      if (step === 2) setWizardProgress(45);
+      if (step === 3) setWizardProgress(85);
+      if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch { } }
+    }
 
-      function toSpanish(status) {
-        if (!status) return 'desconocido';
-        if (status.includes('not found')) return 'no encontrado';
-        const [st, health] = status.split('|');
-        const map = { running: 'corriendo', exited: 'detenido', created: 'creado', restarting: 'reiniciando' };
-        const base = map[st] || st || 'desconocido';
-        const hmap = { healthy: 'saludable', unhealthy: 'no saludable' };
-        return health ? `${base} (${hmap[health] || health})` : base;
-      }
-      function overallStatus(services) {
-        const names = ['frigate', 'frigate_listener', 'frigate_proxy', 'mosquitto'];
-        if (!services) return false; return names.every((n) => (services[n]||'').includes('running'));
-      }
+    function toSpanish(status) {
+      if (!status) return 'desconocido';
+      if (status.includes('not found')) return 'no encontrado';
+      const [st, health] = status.split('|');
+      const map = { running: 'corriendo', exited: 'detenido', created: 'creado', restarting: 'reiniciando' };
+      const base = map[st] || st || 'desconocido';
+      const hmap = { healthy: 'saludable', unhealthy: 'no saludable' };
+      return health ? `${base} (${hmap[health] || health})` : base;
+    }
+    function overallStatus(services) {
+      const names = ['frigate', 'frigate_listener', 'frigate_proxy', 'mosquitto'];
+      if (!services) return false; return names.every((n) => (services[n] || '').includes('running'));
+    }
 
-      let lottieInstance = null;
+    let lottieInstance = null;
 
-      async function refreshStatus() {
-        const st = await window.health.getStatus();
-        const okAll = overallStatus(st.services);
-        const dot = $('overallDot');
-        if (okAll) {
-          dot.className = 'statusDot dot-ok';
-          $('overallText').textContent = 'Vidria está corriendo';
-          setWizardProgress(100);
-          // No spinner/label in running state
-          // Hide start button
-          const startBtn = $('btnStartVidria'); if (startBtn) startBtn.style.display = 'none';
-          // Show header logout, hide bottom logout
-          const topLogout = $('btnLogoutTop'); if (topLogout) topLogout.style.display = '';
-          const bottomLogout = $('btnLogout'); if (bottomLogout) bottomLogout.style.display = 'none';
-          // Show lottie animation
-          const wrap = $('lottieWrap'); if (wrap) wrap.style.display = '';
-          const rsw = $('runStatusWrap'); if (rsw) rsw.style.display = '';
-          if (!lottieInstance && window.lottie) {
-            lottieInstance = window.lottie.loadAnimation({
-              container: $('lottieContainer'),
-              renderer: 'svg',
-              loop: true,
-              autoplay: true,
-              path: 'lottie/agent-running.json',
-            });
-          }
-          // Hide progress bar when running
-          const sidePW = $('sideProgressWrap'); if (sidePW) sidePW.style.display = 'none';
-          // Hide wizard steps if logged in (not needed after configuration)
-          if (isLoggedIn()) { const steps = $('stepsWrap'); if (steps) steps.style.display = 'none'; }
-          // Hide consejos when running
-          const tips = $('tipsWrap'); if (tips) tips.style.display = 'none';
-        } else {
-          dot.className = 'statusDot dot-bad';
-          $('overallText').textContent = 'Vidria no está corriendo';
-          setWizardProgress(90);
-          // No spinner/label when not running per updated design
-          // Show start button
-          const startBtn = $('btnStartVidria'); if (startBtn) startBtn.style.display = '';
-          // Move logout to header even when not running
-          const topLogout = $('btnLogoutTop'); if (topLogout) topLogout.style.display = '';
-          const bottomLogout = $('btnLogout'); if (bottomLogout) bottomLogout.style.display = 'none';
-          // Hide/destroy lottie
-          const wrap = $('lottieWrap'); if (wrap) wrap.style.display = 'none';
-          const rsw = $('runStatusWrap'); if (rsw) rsw.style.display = 'none';
-          if (lottieInstance) { try { lottieInstance.destroy(); } catch {} lottieInstance = null; }
-          // Show progress bars during configuration
-          const sidePW = $('sideProgressWrap'); if (sidePW) sidePW.style.display = '';
-          
-          // Hide steps on Agent screen
-          const steps = $('stepsWrap'); if (steps) steps.style.display = 'none';
-          // Show consejos
-          const tips = $('tipsWrap'); if (tips) tips.style.display = '';
+    async function refreshStatus() {
+      const st = await window.health.getStatus();
+      const okAll = overallStatus(st.services);
+      const dot = $('overallDot');
+      if (okAll) {
+        dot.className = 'statusDot dot-ok';
+        $('overallText').textContent = 'Vidria está corriendo';
+        setWizardProgress(100);
+        // No spinner/label in running state
+        // Hide start button
+        const startBtn = $('btnStartVidria'); if (startBtn) startBtn.style.display = 'none';
+        // Show header logout, hide bottom logout
+        const topLogout = $('btnLogoutTop'); if (topLogout) topLogout.style.display = '';
+        const bottomLogout = $('btnLogout'); if (bottomLogout) bottomLogout.style.display = 'none';
+        // Show lottie animation
+        const wrap = $('lottieWrap'); if (wrap) wrap.style.display = '';
+        const rsw = $('runStatusWrap'); if (rsw) rsw.style.display = '';
+        if (!lottieInstance && window.lottie) {
+          lottieInstance = window.lottie.loadAnimation({
+            container: $('lottieContainer'),
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            path: 'lottie/agent-running.json',
+          });
         }
-        const dockerOk = st.docker && st.docker.installed;
-        const composeOk = st.compose && st.compose.installed;
-        $('dockerInfo').innerHTML = `
+        // Hide progress bar when running
+        const sidePW = $('sideProgressWrap'); if (sidePW) sidePW.style.display = 'none';
+        // Hide wizard steps if logged in (not needed after configuration)
+        if (isLoggedIn()) { const steps = $('stepsWrap'); if (steps) steps.style.display = 'none'; }
+        // Hide consejos when running
+        const tips = $('tipsWrap'); if (tips) tips.style.display = 'none';
+      } else {
+        dot.className = 'statusDot dot-bad';
+        $('overallText').textContent = 'Vidria no está corriendo';
+        setWizardProgress(90);
+        // No spinner/label when not running per updated design
+        // Show start button
+        const startBtn = $('btnStartVidria'); if (startBtn) startBtn.style.display = '';
+        // Move logout to header even when not running
+        const topLogout = $('btnLogoutTop'); if (topLogout) topLogout.style.display = '';
+        const bottomLogout = $('btnLogout'); if (bottomLogout) bottomLogout.style.display = 'none';
+        // Hide/destroy lottie
+        const wrap = $('lottieWrap'); if (wrap) wrap.style.display = 'none';
+        const rsw = $('runStatusWrap'); if (rsw) rsw.style.display = 'none';
+        if (lottieInstance) { try { lottieInstance.destroy(); } catch { } lottieInstance = null; }
+        // Show progress bars during configuration
+        const sidePW = $('sideProgressWrap'); if (sidePW) sidePW.style.display = '';
+
+        // Hide steps on Agent screen
+        const steps = $('stepsWrap'); if (steps) steps.style.display = 'none';
+        // Show consejos
+        const tips = $('tipsWrap'); if (tips) tips.style.display = '';
+      }
+      const dockerOk = st.docker && st.docker.installed;
+      const composeOk = st.compose && st.compose.installed;
+      $('dockerInfo').innerHTML = `
           <div>Plataforma: <span class="note">${st.platform}</span></div>
           <div>Docker: ${dockerOk ? '<span style="color:#22c55e">OK</span>' : '<span style="color:#ef4444">NO</span>'} <span class="note">${st.docker?.version || ''}</span></div>
           <div>Compose: ${composeOk ? '<span style="color:#22c55e">OK</span>' : '<span style="color:#f59e0b">NO</span>'} <span class="note">${st.compose?.version || ''}</span></div>
           <div>Directorio en uso: <span class="note">${st.repoDir || ''}</span></div>
         `;
-        const tbody = $('svcTable'); tbody.innerHTML = '';
-        const map = st.services || {};
-        Object.keys(map).forEach((name) => {
-          const tr = document.createElement('tr'); tr.innerHTML = `<td>${name}</td><td>${toSpanish(map[name])}</td>`; tbody.appendChild(tr);
-        });
-        if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch {} }
+      const tbody = $('svcTable'); tbody.innerHTML = '';
+      const map = st.services || {};
+      Object.keys(map).forEach((name) => {
+        const tr = document.createElement('tr'); tr.innerHTML = `<td>${name}</td><td>${toSpanish(map[name])}</td>`; tbody.appendChild(tr);
+      });
+      if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch { } }
+    }
+
+    async function initWizard() {
+      if (!isLoggedIn()) { showStep(1); return; }
+
+      // PROACTIVE FIX: Sync Customer ID from storage to .env on startup
+      const user = getStoredUser();
+      if (user && user.username) {
+        try { await window.health.setCustomerId(user.username); } catch { }
       }
 
-      async function initWizard() {
-        if (!isLoggedIn()) { showStep(1); return; }
-        const st = await window.health.getStatus();
-        const dockerOk = !!(st.docker && st.docker.installed);
-        if (!dockerOk) { showStep(2); return; }
-        showStep(3); await refreshStatus();
-      }
+      const st = await window.health.getStatus();
+      const dockerOk = !!(st.docker && st.docker.installed);
+      if (!dockerOk) { showStep(2); return; }
+      showStep(3); await refreshStatus();
+    }
 
-      // LOGIN
-      const loginForm = $('loginForm');
-      if (loginForm) {
-        loginForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const username = $('username').value.trim();
-          const password = $('password').value;
-          const btn = $('btnLogin');
-          const err = $('loginError');
-          err.style.display = 'none'; err.textContent = '';
-          btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Ingresando...';
-          try {
-            const res = await fetch(LOGIN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-            if (!res.ok) { let msg = 'Credenciales inválidas'; try { const data = await res.json(); msg = data?.message || data?.error || msg; } catch {} throw new Error(msg); }
-            const data = await res.json();
-            const token = data?.accessToken || data?.access_token || data?.token;
-            const user = data?.user || (data?.username ? { username: data.username, email: data?.email || '' } : null);
-            if (!token || !user) throw new Error('Respuesta inválida del servidor');
-            setSession(token, user);
-            try { if (user?.username) await window.health.setCustomerId(user.username); } catch {}
-            $('password').value = '';
-            const st = await window.health.getStatus();
-            const dockerOk = !!(st.docker && st.docker.installed);
-            if (!dockerOk) showStep(2); else { showStep(3); await refreshStatus(); }
-          } catch (ex) {
-            err.textContent = ex.message || 'No se pudo iniciar sesión'; err.style.display = '';
-          } finally {
-            btn.disabled = false; btn.textContent = orig;
-          }
-        });
-      }
-
-      // DOCKER INSTALL
-      const btnInst = $('btnInstallDocker');
-      const installSpinner = $('installSpinner');
-      const installLabel = $('installLabel');
-      const installProgress = $('installProgress');
-      if (btnInst) {
-        btnInst.addEventListener('click', async () => {
-          btnInst.disabled = true; installSpinner.style.display = 'inline-block';
-          let pct = 5; const timer = setInterval(() => { pct = Math.min(pct + 3, 90); installProgress.style.width = pct + '%'; }, 1200);
-          installLabel.textContent = 'Descargando e instalando Docker...';
-          const res = await window.health.installDocker();
-          clearInterval(timer);
-          if (res === true) {
-            installLabel.textContent = 'Abriendo Docker...'; installProgress.style.width = '95%';
-            await window.health.startDocker();
-            let ready = false; const startedAt = Date.now();
-            while (!ready && Date.now() - startedAt < 120000) {
-              const st = await window.health.getStatus();
-              ready = !!(st.docker && st.docker.installed);
-              await new Promise(r => setTimeout(r, 2000));
-            }
-            installProgress.style.width = '100%'; installLabel.textContent = ready ? 'Docker listo' : 'No se detectó Docker';
-            if (ready) { showStep(3); await refreshStatus(); }
-          } else {
-            installLabel.textContent = (typeof res === 'string' ? res : 'Instalación finalizada');
-            btnInst.disabled = false; installSpinner.style.display = 'none';
-          }
-        });
-      }
-
-      // AGENT screen
-      $('btnStartVidria').addEventListener('click', async () => {
-        const btn = $('btnStartVidria');
-        const prevText = btn ? btn.textContent : '';
-        if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
+    // LOGIN
+    const loginForm = $('loginForm');
+    if (loginForm) {
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = $('username').value.trim();
+        const password = $('password').value;
+        const btn = $('btnLogin');
+        const err = $('loginError');
+        err.style.display = 'none'; err.textContent = '';
+        btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Ingresando...';
         try {
-          if (window.health.startDockerAndWait) {
-            await window.health.startDockerAndWait();
-          } else {
-            await window.health.startDocker();
-            await new Promise((r) => setTimeout(r, 3000));
-          }
-          await window.health.composeUp();
-          setTimeout(refreshStatus, 3500);
+          const res = await fetch(LOGIN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+          if (!res.ok) { let msg = 'Credenciales inválidas'; try { const data = await res.json(); msg = data?.message || data?.error || msg; } catch { } throw new Error(msg); }
+          const data = await res.json();
+          const token = data?.accessToken || data?.access_token || data?.token;
+          const user = data?.user || (data?.username ? { username: data.username, email: data?.email || '' } : null);
+          if (!token || !user) throw new Error('Respuesta inválida del servidor');
+          setSession(token, user);
+          try { if (user?.username) await window.health.setCustomerId(user.username); } catch { }
+          $('password').value = '';
+          const st = await window.health.getStatus();
+          const dockerOk = !!(st.docker && st.docker.installed);
+          if (!dockerOk) showStep(2); else { showStep(3); await refreshStatus(); }
+        } catch (ex) {
+          err.textContent = ex.message || 'No se pudo iniciar sesión'; err.style.display = '';
         } finally {
-          if (btn) { btn.disabled = false; btn.textContent = prevText || 'Iniciar Vidria'; }
+          btn.disabled = false; btn.textContent = orig;
         }
       });
-      async function handleLogout() {
-        // Clear auth/session on logout
-        clearSession();
-        try { await window.health.clearCustomerId(); } catch {}
+    }
 
-        // Stop Vidria services (docker compose down)
-        try { await window.health.composeDown(); } catch {}
+    // DOCKER INSTALL
+    const btnInst = $('btnInstallDocker');
+    const installSpinner = $('installSpinner');
+    const installLabel = $('installLabel');
+    const installProgress = $('installProgress');
+    if (btnInst) {
+      btnInst.addEventListener('click', async () => {
+        btnInst.disabled = true; installSpinner.style.display = 'inline-block';
+        let pct = 5; const timer = setInterval(() => { pct = Math.min(pct + 3, 90); installProgress.style.width = pct + '%'; }, 1200);
+        installLabel.textContent = 'Descargando e instalando Docker...';
+        const res = await window.health.installDocker();
+        clearInterval(timer);
+        if (res === true) {
+          installLabel.textContent = 'Abriendo Docker...'; installProgress.style.width = '95%';
+          await window.health.startDocker();
+          let ready = false; const startedAt = Date.now();
+          while (!ready && Date.now() - startedAt < 120000) {
+            const st = await window.health.getStatus();
+            ready = !!(st.docker && st.docker.installed);
+            await new Promise(r => setTimeout(r, 2000));
+          }
+          installProgress.style.width = '100%'; installLabel.textContent = ready ? 'Docker listo' : 'No se detectó Docker';
+          if (ready) { showStep(3); await refreshStatus(); }
+        } else {
+          installLabel.textContent = (typeof res === 'string' ? res : 'Instalación finalizada');
+          btnInst.disabled = false; installSpinner.style.display = 'none';
+        }
+      });
+    }
 
-        // Hide header logout
-        const topLogout = $('btnLogoutTop'); if (topLogout) topLogout.style.display = 'none';
-
-        // Hide Lottie and destroy instance
-        const wrap = $('lottieWrap'); if (wrap) wrap.style.display = 'none';
-        if (lottieInstance) { try { lottieInstance.destroy(); } catch {} lottieInstance = null; }
-
-        // Show right-side progress bar and reset to initial progress
-        const sidePW = $('sideProgressWrap'); if (sidePW) sidePW.style.display = '';
-        setWizardProgress(10);
-
-        // Show steps for configuration
-        const steps = $('stepsWrap'); if (steps) steps.style.display = '';
-
-        // Show tips again
-        const tips = $('tipsWrap'); if (tips) tips.style.display = '';
-
-        // Go back to Step 1 (Login)
-        showStep(1);
-        if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch {} }
+    // AGENT screen
+    $('btnStartVidria').addEventListener('click', async () => {
+      const btn = $('btnStartVidria');
+      const prevText = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'Iniciando...'; }
+      try {
+        if (window.health.startDockerAndWait) {
+          await window.health.startDockerAndWait();
+        } else {
+          await window.health.startDocker();
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+        await window.health.composeUp();
+        setTimeout(refreshStatus, 3500);
+      } catch (ex) {
+        alert('Error al iniciar: ' + ex.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = prevText || 'Iniciar Vidria'; }
       }
-      $('btnLogout').addEventListener('click', handleLogout);
-      const btnLogoutTop = $('btnLogoutTop'); if (btnLogoutTop) btnLogoutTop.addEventListener('click', handleLogout);
+    });
+    async function handleLogout() {
+      // Clear auth/session on logout
+      clearSession();
+      try { await window.health.clearCustomerId(); } catch { }
 
-      // Init
-      initWizard();
-    </script>
-  </body>
-  </html>
+      // Stop Vidria services (docker compose down)
+      try { await window.health.composeDown(); } catch { }
 
+      // Hide header logout
+      const topLogout = $('btnLogoutTop'); if (topLogout) topLogout.style.display = 'none';
+
+      // Hide Lottie and destroy instance
+      const wrap = $('lottieWrap'); if (wrap) wrap.style.display = 'none';
+      if (lottieInstance) { try { lottieInstance.destroy(); } catch { } lottieInstance = null; }
+
+      // Show right-side progress bar and reset to initial progress
+      const sidePW = $('sideProgressWrap'); if (sidePW) sidePW.style.display = '';
+      setWizardProgress(10);
+
+      // Show steps for configuration
+      const steps = $('stepsWrap'); if (steps) steps.style.display = '';
+
+      // Show tips again
+      const tips = $('tipsWrap'); if (tips) tips.style.display = '';
+
+      // Go back to Step 1 (Login)
+      showStep(1);
+      if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch { } }
+    }
+    $('btnLogout').addEventListener('click', handleLogout);
+    const btnLogoutTop = $('btnLogoutTop'); if (btnLogoutTop) btnLogoutTop.addEventListener('click', handleLogout);
+
+    // Init
+    initWizard();
+  </script>
+</body>
+
+</html>
