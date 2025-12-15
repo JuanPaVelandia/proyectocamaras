@@ -2,6 +2,7 @@
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const https = require('https');
 const { spawn } = require('child_process');
 
 // -- DEBUG LOGGING --
@@ -245,11 +246,123 @@ ipcMain.handle('health:composeDown', async () => {
   await run(cmd, args, { cwd: repoDir });
 });
 
-ipcMain.handle('health:ensureDockerInstaller', async () => { return ''; }); // Stub
-ipcMain.handle('health:installDocker', async () => {
+// ---- Docker auto-download + install (macOS/Windows) ----
+function exists(p) { try { return fs.existsSync(p); } catch { return false; } }
+
+async function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    try { fs.mkdirSync(path.dirname(dest), { recursive: true }); } catch {}
+    const tmp = dest + '.download';
+    const ws = fs.createWriteStream(tmp);
+    const onErr = (e) => {
+      try { ws.close(); } catch {}
+      try { fs.unlinkSync(tmp); } catch {}
+      logDebug(`downloadFile error: ${e.message}`);
+      reject(e);
+    };
+    const follow = (u) => {
+      logDebug(`Downloading: ${u}`);
+      const req = https.get(u, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.destroy();
+          return follow(res.headers.location);
+        }
+        if (res.statusCode !== 200) return onErr(new Error(`HTTP ${res.statusCode}`));
+        res.pipe(ws);
+        ws.on('finish', () => {
+          try { ws.close(() => { try { fs.renameSync(tmp, dest); resolve(dest); } catch (e) { onErr(e); } }); } catch (e) { onErr(e); }
+        });
+      });
+      req.on('error', onErr);
+    };
+    follow(url);
+  });
+}
+
+async function ensureDockerInstaller() {
+  const platform = os.platform();
+  const repoDir = resolveRepoDir();
+  if (platform === 'darwin') {
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    const dmgPath = path.join(repoDir, 'mac', 'Docker.dmg');
+    if (exists(dmgPath)) return dmgPath;
+    // Prefer main channel; fall back to stable
+    const urls = arch === 'arm64'
+      ? [
+          'https://desktop.docker.com/mac/main/arm64/Docker.dmg',
+          'https://desktop.docker.com/mac/stable/arm64/Docker.dmg',
+        ]
+      : [
+          'https://desktop.docker.com/mac/main/amd64/Docker.dmg',
+          'https://desktop.docker.com/mac/stable/amd64/Docker.dmg',
+        ];
+    let lastErr = null;
+    for (const u of urls) {
+      try { return await downloadFile(u, dmgPath); } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('No se pudo descargar Docker para macOS');
+  }
+  if (platform === 'win32') {
+    const installer = path.join(repoDir, 'windows', 'Docker Desktop Installer.exe');
+    if (exists(installer)) return installer;
+    const url = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe';
+    return downloadFile(url, installer);
+  }
+  throw new Error('Descarga automática solo soportada en macOS y Windows');
+}
+
+async function installDockerMac() {
+  if (os.platform() !== 'darwin') throw new Error('Instalación automática soportada solo en macOS');
+  const dmgPath = await ensureDockerInstaller();
+  const tmpScript = path.join(os.tmpdir(), `vidria_install_docker_${Date.now()}.applescript`);
+  const asContent = `set dmgPath to "${dmgPath.replace(/"/g, '\\"')}"\n` +
+    `do shell script "/usr/bin/hdiutil attach " & quoted form of dmgPath with administrator privileges\n` +
+    `do shell script "/Volumes/Docker/Docker.app/Contents/MacOS/install --accept-license" with administrator privileges\n` +
+    `do shell script "/usr/bin/hdiutil detach /Volumes/Docker" with administrator privileges\n`;
+  fs.writeFileSync(tmpScript, asContent, 'utf8');
+  const r = await run('osascript', [tmpScript], { shell: false });
+  try { fs.unlinkSync(tmpScript); } catch {}
+  if (r.code !== 0) throw new Error(r.err || r.out || 'Fallo instalando Docker');
+  await run('/usr/bin/open', ['-a', 'Docker'], { shell: false });
+  return true;
+}
+
+async function installDockerWin() {
+  const installer = await ensureDockerInstaller();
+  const tmpScript = path.join(os.tmpdir(), `vidria_install_docker_${Date.now()}.ps1`);
+  const safePath = installer.replace(/`/g, '``').replace(/"/g, '""');
+  const ps = `\n$installer = "${safePath}"\nif (-not (Test-Path $installer)) { throw "No se encontró el instalador en: $installer" }\nStart-Process -FilePath $installer -ArgumentList 'install --accept-license --always-run-service' -Verb RunAs -Wait\n`;
+  fs.writeFileSync(tmpScript, ps, 'utf8');
+  const r = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-File', tmpScript], { windowsHide: true, shell: false });
+  try { fs.unlinkSync(tmpScript); } catch {}
+  if (r.code !== 0) throw new Error(r.err || r.out || 'Fallo instalando Docker en Windows');
+  // Try to open Docker Desktop
+  let r2 = await run('powershell', ['-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Start-Process "Docker Desktop"'], { windowsHide: true });
+  if (r2.code !== 0) {
+    await run('cmd', ['/c', 'start', '""', '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"'], { windowsHide: true });
+  }
+  return true;
+}
+
+async function installDocker() {
+  const platform = os.platform();
+  if (platform === 'darwin') return installDockerMac();
+  if (platform === 'win32') return installDockerWin();
+  // Fallback to opening website for unsupported OS
   const url = 'https://www.docker.com/products/docker-desktop/';
   await shell.openExternal(url);
-  return 'Se ha abierto la página de Docker. Por favor descárgalo e instálalo.';
+  return 'Sistema no soportado: abre la página de Docker para instalar.';
+}
+
+ipcMain.handle('health:ensureDockerInstaller', async () => {
+  try { return await ensureDockerInstaller(); } catch (e) { return String(e.message || e); }
+});
+ipcMain.handle('health:installDocker', async () => {
+  try { return await installDocker(); } catch (e) {
+    // On error, open website as last resort
+    try { await shell.openExternal('https://www.docker.com/products/docker-desktop/'); } catch {}
+    return String(e.message || e);
+  }
 });
 ipcMain.handle('health:setCustomerId', async (ev, id) => {
   try {
@@ -295,25 +408,44 @@ ipcMain.handle('health:setCustomerId', async (ev, id) => {
 });
 ipcMain.handle('health:clearCustomerId', async () => { });
 ipcMain.handle('health:fitWindow', async () => {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (win) {
-    // win.setContentSize(850, 600); 
+  try {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return false;
+    const h = await win.webContents.executeJavaScript('(() => { const el = document.querySelector(".wizard"); return el ? el.offsetHeight : document.body.scrollHeight; })()');
+    const [w] = win.getContentSize();
+    const clamped = Math.min(Math.max(420, Math.ceil(h)), 820);
+    win.setContentSize(w, clamped);
+    return true;
+  } catch (e) {
+    logDebug(`fitWindow error: ${e.message}`);
+    return false;
   }
 });
 
 // -- APP LIFECYCLE --
 function createWindow() {
   const win = new BrowserWindow({
-    width: 900, height: 700,
+    width: 900,
+    height: 600,
+    resizable: false,
+    useContentSize: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
     autoHideMenuBar: true,
-    show: false
+    show: false,
   });
   win.loadFile('wizard.html');
+  win.webContents.on('did-finish-load', async () => {
+    try {
+      const h = await win.webContents.executeJavaScript('(() => { const el = document.querySelector(".wizard"); return el ? el.offsetHeight : document.body.scrollHeight; })()');
+      const [w] = win.getContentSize();
+      const clamped = Math.min(Math.max(420, Math.ceil(h)), 820);
+      win.setContentSize(w, clamped);
+    } catch (e) { logDebug(`did-finish-load fit error: ${e.message}`); }
+  });
   win.once('ready-to-show', () => win.show());
 }
 
