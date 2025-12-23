@@ -12,6 +12,15 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+# --- LOG FILTERING ---
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.getMessage().find("/api/cameras/ingest-mapping") == -1
+
+# Filter out noise from uvicorn access logs
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+# ---------------------
+
 app = FastAPI(title=settings.PROJECT_NAME)
 
 # Configurar ProxyHeadersMiddleware para Railway (HTTPS)

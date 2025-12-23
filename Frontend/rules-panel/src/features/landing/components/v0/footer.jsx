@@ -16,6 +16,11 @@ export function Footer({ onPrivacyPolicy }) {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Transforma tus cámaras de seguridad en cámaras inteligentes con IA.
                         </p>
+                        <p className="text-xs text-muted-foreground font-medium">
+                            Vidria S.A.S. - NIT: 90219259<br />
+                            Bogotá, Colombia.<br />
+                            Teléfono: +57 3017797856
+                        </p>
                     </div>
 
                 </div>
