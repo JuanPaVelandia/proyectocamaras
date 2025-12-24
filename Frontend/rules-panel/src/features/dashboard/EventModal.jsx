@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { X, ChevronLeft, ChevronRight, Calendar, Clock, Camera, Tag, AlertTriangle } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
 
@@ -6,7 +6,7 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
     // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (!isOpen) return; // Ignore if closed
+            if (!isOpen) return;
             if (e.key === "Escape") onClose();
             if (e.key === "ArrowRight" && hasNext) onNext();
             if (e.key === "ArrowLeft" && hasPrev) onPrev();
@@ -41,21 +41,21 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
     const label = event_data?.label || "Desconocido";
     const camera = event_data?.camera || "Desconocida";
     const score = event_data?.score ? Math.round(event_data.score * 100) : null;
-    const dateObj = new Date(triggered_at);
 
-    // Zoom Logic
-    const [zoom, setZoom] = useState({ x: 0, y: 0, isActive: false });
-
-    const handleMouseMove = (e) => {
-        const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-        const x = ((e.clientX - left) / width) * 100;
-        const y = ((e.clientY - top) / height) * 100;
-        setZoom({ x, y, isActive: true });
-    };
-
-    const handleMouseLeave = () => {
-        setZoom(prev => ({ ...prev, isActive: false }));
-    };
+    // Safe date parsing
+    let dateStr = "N/A";
+    let timeStr = "N/A";
+    try {
+        if (triggered_at) {
+            const dateObj = new Date(triggered_at);
+            if (!isNaN(dateObj.getTime())) {
+                dateStr = dateObj.toLocaleDateString();
+                timeStr = dateObj.toLocaleTimeString();
+            }
+        }
+    } catch (e) {
+        console.error("Date parsing error", e);
+    }
 
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -74,20 +74,12 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
                 </button>
 
                 {/* Left: Image */}
-                <div
-                    className="relative flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-full group overflow-hidden cursor-zoom-in"
-                    onMouseMove={handleMouseMove}
-                    onMouseLeave={handleMouseLeave}
-                >
+                <div className="relative flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-full group">
                     {snapshot_base64 ? (
                         <img
                             src={`data:image/jpeg;base64,${snapshot_base64}`}
                             alt="Event Snapshot"
-                            style={{
-                                transformOrigin: `${zoom.x}% ${zoom.y}%`,
-                                transform: zoom.isActive ? "scale(2.5)" : "scale(1)",
-                            }}
-                            className="w-full h-full object-contain transition-transform duration-100 ease-out will-change-transform"
+                            className="w-full h-full object-contain"
                         />
                     ) : (
                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -152,12 +144,12 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
                             <div className="flex items-center gap-3 text-sm">
                                 <Calendar className="w-4 h-4 text-primary" />
                                 <span className="font-medium">Fecha:</span>
-                                <span className="text-muted-foreground">{dateObj.toLocaleDateString()}</span>
+                                <span className="text-muted-foreground">{dateStr}</span>
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                                 <Clock className="w-4 h-4 text-primary" />
                                 <span className="font-medium">Hora:</span>
-                                <span className="text-muted-foreground">{dateObj.toLocaleTimeString()}</span>
+                                <span className="text-muted-foreground">{timeStr}</span>
                             </div>
                         </div>
 
@@ -178,9 +170,6 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
                                 <span className="text-muted-foreground">{rule_name || "N/A"}</span>
                             </div>
                         </div>
-
-                        {/* Technical Details Removed */}
-
                     </div>
 
                     {/* Footer / Actions (Optional) */}
