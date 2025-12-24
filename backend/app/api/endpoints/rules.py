@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, List
 import logging
 import json
 
@@ -67,7 +67,10 @@ def list_rules(
 ):
     rules = (
         db.query(RuleDB)
-        .filter(RuleDB.user_id == current_user.id)
+        .filter(
+            RuleDB.user_id == current_user.id,
+            RuleDB.is_deleted == False
+        )
         .order_by(RuleDB.id.asc())
         .all()
     )
@@ -96,18 +99,113 @@ def list_rules(
 
 @router.get("/hits")
 def list_rule_hits(
-    limit: int = 50,
+    page: int = 1,
+    page_size: int = 20,
+    camera: List[str] = Query(None),
+    label: List[str] = Query(None),
+    start_date: str | None = None,
+    end_date: str | None = None,
     current_user: UserDB = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    rows = (
+    # Query Base
+    query = (
         db.query(RuleHitDB)
         .join(RuleDB, RuleHitDB.rule_id == RuleDB.id)
         .filter(RuleDB.user_id == current_user.id)
+    )
+
+    # Filters
+    if camera:
+        query = query.filter(RuleDB.camera.in_(camera))
+    
+    if label:
+        # Para búsqueda case-insensitive en lista, tendríamos que iterar o usar ILIKE ANY (Postgres)
+        # SQLite no soporta ILIKE ANY fácilmente.
+        # Asumiremos coincidencia exacta para multi-select, o usaremos un workaround.
+        # Dado que los valores vienen de un dropdown, la coincidencia exacta es preferible/segura.
+        query = query.filter(RuleDB.label.in_(label))
+
+    user_timezone = current_user.timezone or "UTC"
+
+    if start_date:
+        try:
+            # El frontend envía datetime-local (YYYY-MM-DDTHH:MM) sin info de zona horaria.
+            # Interpretamos esa fecha como la HORA LOCAL del usuario.
+            # Convertimos esa hora local -> UTC para comparar con la DB.
+            dt_local_str = start_date.replace("Z", "") # Limpieza por si acaso
+            # convert_local_time_to_utc devuelve un objeto time (HH:MM), pero aquí necesitamos datetime completo.
+            # No podemos usar esa función directamente porque es para horas simples.
+            # Haremos la conversión manual aquí usando pytz o similar si estuviera, 
+            # pero dado que convert_local_time_to_utc usa una lógica manual simple, haremos algo parecido.
+            
+            # Simple approach: Parse naive (Local) -> Attach User TZ -> Convert to UTC -> Remove TZ info (make naive UTC)
+            from app.utils.timezone_utils import pytz
+            local_tz = pytz.timezone(user_timezone)
+            
+            # Parsear string naive
+            dt_naive = datetime.fromisoformat(dt_local_str)
+            # Asignar zona horaria del usuario
+            dt_local = local_tz.localize(dt_naive)
+            # Convertir a UTC
+            dt_utc = dt_local.astimezone(pytz.UTC)
+            # Hacerlo naive de nuevo para comparar con SQLAlchemy (si el campo es naive)
+            dt_query = dt_utc.replace(tzinfo=None)
+
+            query = query.filter(RuleHitDB.triggered_at >= dt_query)
+        except Exception as e:
+            logger.error(f"Error parsing start_date: {e}")
+            pass
+
+    if end_date:
+        try:
+            dt_local_str = end_date.replace("Z", "")
+            from app.utils.timezone_utils import pytz
+            local_tz = pytz.timezone(user_timezone)
+            
+            dt_naive = datetime.fromisoformat(dt_local_str)
+            dt_local = local_tz.localize(dt_naive)
+            dt_utc = dt_local.astimezone(pytz.UTC)
+            dt_query = dt_utc.replace(tzinfo=None)
+
+            query = query.filter(RuleHitDB.triggered_at <= dt_query)
+        except Exception as e:
+            logger.error(f"Error parsing end_date: {e}")
+            pass
+
+    # Total count (antes de paginacion)
+    total_count = query.count()
+    total_pages = (total_count + page_size - 1) // page_size
+
+    # Order and Pagination
+    rows = (
+        query
         .order_by(RuleHitDB.id.desc())
-        .limit(limit)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
+
+    # Get distinct available options for filter dropdowns
+    # Cameras
+    distinct_cameras_rows = (
+        db.query(RuleDB.camera)
+        .join(RuleHitDB, RuleHitDB.rule_id == RuleDB.id)
+        .filter(RuleDB.user_id == current_user.id)
+        .distinct()
+        .all()
+    )
+    unique_cameras = sorted([r[0] for r in distinct_cameras_rows if r[0]])
+
+    # Labels
+    distinct_labels_rows = (
+        db.query(RuleDB.label)
+        .join(RuleHitDB, RuleHitDB.rule_id == RuleDB.id)
+        .filter(RuleDB.user_id == current_user.id)
+        .distinct()
+        .all()
+    )
+    unique_labels = sorted([r[0] for r in distinct_labels_rows if r[0]])
 
     hits = []
     for h in rows:
@@ -143,7 +241,15 @@ def list_rule_hits(
             }
         )
 
-    return {"count": len(hits), "hits": hits}
+    return {
+        "hits": hits,
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "cameras": unique_cameras,
+        "labels": unique_labels
+    }
 
 
 @router.patch("/{rule_id}")
@@ -155,7 +261,8 @@ def update_rule(
 ):
     rule = db.query(RuleDB).filter(
         RuleDB.id == rule_id,
-        RuleDB.user_id == current_user.id
+        RuleDB.user_id == current_user.id,
+        RuleDB.is_deleted == False
     ).first()
 
     if not rule:
@@ -216,7 +323,7 @@ def update_rule(
 
 
 def _delete_rule_internal(rule_id: int, current_user: UserDB, db: Session):
-    """Función interna para eliminar una regla (reutilizable)"""
+    """Función interna para eliminar una regla (SOFT DELETE)"""
     rule = db.query(RuleDB).filter(
         RuleDB.id == rule_id,
         RuleDB.user_id == current_user.id
@@ -226,19 +333,14 @@ def _delete_rule_internal(rule_id: int, current_user: UserDB, db: Session):
         logger.warning(f"Regla {rule_id} no encontrada para usuario {current_user.id}")
         raise HTTPException(status_code=404, detail="Rule not found")
 
-    # Eliminar primero todos los hits asociados a esta regla
-    hits_count = db.query(RuleHitDB).filter(RuleHitDB.rule_id == rule_id).count()
-    if hits_count > 0:
-        logger.info(f"Eliminando {hits_count} hits asociados a la regla {rule_id}")
-        db.query(RuleHitDB).filter(RuleHitDB.rule_id == rule_id).delete()
+    # SOFT DELETE: Marcar como eliminada y deshabilitar
+    rule.is_deleted = True
+    rule.enabled = False
     
-    # Ahora eliminar la regla
-    logger.info(f"Eliminando regla {rule_id}: {rule.name}")
-    db.delete(rule)
     db.commit()
 
-    logger.info(f"Regla {rule_id} eliminada exitosamente")
-    return {"status": "ok", "message": f"Rule deleted successfully (removed {hits_count} associated hits)"}
+    logger.info(f"Regla {rule_id} marcada como eliminada (Soft Delete)")
+    return {"status": "ok", "message": "Rule deleted successfully (Soft Delete)"}
 
 
 @router.delete("/{rule_id}")

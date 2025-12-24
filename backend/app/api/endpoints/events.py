@@ -88,10 +88,19 @@ async def receive_event(
     if body.get('type') == 'end':
         db = SessionLocal()
         try:
+            # MULTI-TENANT FIX: Find user by customer_id
+            customer_id = body.get("customer_id")
+            user_id = None
+            if customer_id:
+                user = db.query(UserDB).filter(UserDB.username == customer_id).first()
+                if user:
+                    user_id = user.id
+            
             db_event = EventDB(
                 received_at=now,
                 payload=json.dumps(body),
-                snapshot_base64=snapshot_b64
+                snapshot_base64=snapshot_b64,
+                user_id=user_id  # Save ownership
             )
             db.add(db_event)
             db.commit()
@@ -158,8 +167,9 @@ def list_events_db(
 
     rows = (
         db.query(EventDB)
+        .filter(EventDB.user_id == current_user.id)  # Strict Multi-Tenant Filter
         .order_by(EventDB.id.desc())
-        .limit(limit * 3)  # Buscar más para compensar el filtrado
+        .limit(limit)
         .all()
     )
 

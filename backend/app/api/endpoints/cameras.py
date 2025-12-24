@@ -147,6 +147,7 @@ def list_cameras(
             last_event = (
                 db.query(EventDB)
                 .filter(
+                    EventDB.user_id == current_user.id, # Strict Isolation
                     EventDB.snapshot_base64.isnot(None),
                     EventDB.payload.like(f'%"camera": "{camera.name}"%')
                 )

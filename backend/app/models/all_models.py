@@ -39,6 +39,9 @@ class EventDB(Base):
     received_at = Column(DateTime, index=True)
     payload = Column(Text)
     snapshot_base64 = Column(Text, nullable=True)  # Snapshot en base64
+    
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("UserDB")
 
     rule_hits = relationship("RuleHitDB", back_populates="event")
 
@@ -65,6 +68,7 @@ class RuleDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     enabled = Column(Boolean, default=True)
+    is_deleted = Column(Boolean, default=False)  # Soft delete
 
     camera = Column(String(255), nullable=True)
     label = Column(String(255), nullable=True)
