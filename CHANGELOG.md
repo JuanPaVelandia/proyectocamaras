@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
   - **Refined Labels**: "Car,bus,truck" rules now appear as separate selectable options.
 
 ### 💄 UI/UX
+- **Collapsible Filters**: Cleaned up the dashboard by hiding filter options behind a toggle button.
 - **Infinite Event Modal**: 
   - New pop-up viewer for events with large snapshots.
   - Seamless navigation between events, automatically loading previous/next pages.

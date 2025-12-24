@@ -4,7 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { MultiSelect } from "../../components/ui/MultiSelect";
 import { useToast } from "../../context/ToastContext";
-import { Shield, Filter, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Filter, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { EventModal } from "./EventModal";
 
 const LABEL_TRANSLATIONS = {
@@ -114,6 +114,9 @@ export function HitsSection() {
     const [selectedEventIndex, setSelectedEventIndex] = useState(null);
     const [pendingNavigation, setPendingNavigation] = useState(null); // 'next' | 'prev'
     const [lastLoadedPage, setLastLoadedPage] = useState(1);
+
+    // Collapsible Filters State
+    const [showFilters, setShowFilters] = useState(false);
 
     const handleEventClick = (index) => {
         setSelectedEventIndex(index);
@@ -230,76 +233,88 @@ export function HitsSection() {
     return (
         <div className="flex flex-col gap-6 w-full animate-in fade-in duration-500">
             {/* Filters Card */}
-            <Card className="p-6 relative z-20">
+            <Card className="p-6 relative z-20 transition-all duration-300">
                 <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold flex items-center gap-2">
+
+                        {/* Toggle Button for Filters */}
+                        <button
+                            onClick={() => setShowFilters(!showFilters)}
+                            className="flex items-center gap-2 text-lg font-semibold hover:opacity-80 transition-opacity"
+                        >
                             <Filter className="w-5 h-5 text-muted-foreground" />
                             Filtros
-                        </h3>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={clearFilters}
-                                className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
-                            >
-                                Limpiar
-                            </button>
-                            <button
-                                onClick={applyFilters}
-                                className="bg-primary text-primary-foreground px-4 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
-                            >
-                                <Search className="w-4 h-4" />
-                                Buscar
-                            </button>
-                        </div>
+                            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+
+                        {showFilters && (
+                            <div className="flex gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <button
+                                    onClick={clearFilters}
+                                    className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
+                                >
+                                    Limpiar
+                                </button>
+                                <button
+                                    onClick={applyFilters}
+                                    className="bg-primary text-primary-foreground px-4 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+                                >
+                                    <Search className="w-4 h-4" />
+                                    Aplicar
+                                </button>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Camera Select */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground">Cámaras</label>
-                            <MultiSelect
-                                options={availableCameras}
-                                value={filters.camera}
-                                onChange={(val) => handleFilterChange("camera", val)}
-                                placeholder="Todas las cámaras"
-                            />
-                        </div>
+                    {/* Collapsible Filter Content */}
+                    {showFilters && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            {/* Camera Select */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Cámaras</label>
+                                <MultiSelect
+                                    options={availableCameras}
+                                    value={filters.camera}
+                                    onChange={(val) => handleFilterChange("camera", val)}
+                                    placeholder="Todas las cámaras"
+                                />
+                            </div>
 
-                        {/* Label Select (Translated) */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground">Etiquetas</label>
-                            <MultiSelect
-                                options={availableLabels}
-                                value={filters.label}
-                                onChange={(val) => handleFilterChange("label", val)}
-                                placeholder="Todas las etiquetas"
-                                renderLabel={getLabelTranslation}
-                            />
-                        </div>
+                            {/* Label Select (Translated) */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Etiquetas</label>
+                                <MultiSelect
+                                    options={availableLabels}
+                                    value={filters.label}
+                                    onChange={(val) => handleFilterChange("label", val)}
+                                    placeholder="Todas las etiquetas"
+                                    renderLabel={getLabelTranslation}
+                                />
+                            </div>
 
-                        {/* Start Date */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground">Desde</label>
-                            <input
-                                type="datetime-local"
-                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                value={filters.start_date}
-                                onChange={(e) => handleFilterChange("start_date", e.target.value)}
-                            />
-                        </div>
+                            {/* Start Date */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Desde</label>
+                                <input
+                                    type="datetime-local"
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={filters.start_date}
+                                    onChange={(e) => handleFilterChange("start_date", e.target.value)}
+                                />
+                            </div>
 
-                        {/* End Date */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground">Hasta</label>
-                            <input
-                                type="datetime-local"
-                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                value={filters.end_date}
-                                onChange={(e) => handleFilterChange("end_date", e.target.value)}
-                            />
+                            {/* End Date */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">Hasta</label>
+                                <input
+                                    type="datetime-local"
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={filters.end_date}
+                                    onChange={(e) => handleFilterChange("end_date", e.target.value)}
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </Card>
 
