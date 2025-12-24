@@ -3,11 +3,10 @@ import { X, ChevronLeft, ChevronRight, Calendar, Clock, Camera, Tag, AlertTriang
 import { Badge } from "../../components/ui/Badge";
 
 export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, hasPrev }) {
-    if (!isOpen || !event) return null;
-
     // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e) => {
+            if (!isOpen) return; // Ignore if closed
             if (e.key === "Escape") onClose();
             if (e.key === "ArrowRight" && hasNext) onNext();
             if (e.key === "ArrowLeft" && hasPrev) onPrev();
@@ -15,7 +14,7 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [onClose, onNext, onPrev, hasNext, hasPrev]);
+    }, [isOpen, onClose, onNext, onPrev, hasNext, hasPrev]);
 
     // Prevent scrolling when modal is open
     useEffect(() => {
@@ -28,6 +27,8 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
             document.body.style.overflow = "unset";
         };
     }, [isOpen]);
+
+    if (!isOpen || !event) return null;
 
     const {
         snapshot_base64,
@@ -43,12 +44,12 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
     const dateObj = new Date(triggered_at);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
             {/* Backdrop click to close */}
             <div className="absolute inset-0" onClick={onClose} />
 
             {/* Modal Content */}
-            <div className="relative w-full max-w-5xl bg-card rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] border border-border">
+            <div className="relative w-full max-w-[95vw] h-[90vh] bg-card rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-border">
 
                 {/* Close Button (Mobile) */}
                 <button
@@ -156,18 +157,8 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
                             </div>
                         </div>
 
-                        {/* Additional Info Box */}
-                        <div className="mt-8 p-4 bg-muted/50 rounded-lg border text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2 mb-2 text-foreground font-medium">
-                                <AlertTriangle className="w-4 h-4" />
-                                Detalles Técnicos
-                            </div>
-                            <ul className="space-y-1 text-xs list-disc list-inside">
-                                <li>Duración: {event_data?.duration || 0}s</li>
-                                <li>Zonas: {event_data?.zones?.join(", ") || "Ninguna"}</li>
-                                <li>ID Frigate: {event_data?.id || "N/A"}</li>
-                            </ul>
-                        </div>
+                        {/* Technical Details Removed */}
+
                     </div>
 
                     {/* Footer / Actions (Optional) */}

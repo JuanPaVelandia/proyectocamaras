@@ -113,6 +113,7 @@ export function HitsSection() {
     // Modal State
     const [selectedEventIndex, setSelectedEventIndex] = useState(null);
     const [pendingNavigation, setPendingNavigation] = useState(null); // 'next' | 'prev'
+    const [lastLoadedPage, setLastLoadedPage] = useState(1);
 
     const handleEventClick = (index) => {
         setSelectedEventIndex(index);
@@ -151,7 +152,7 @@ export function HitsSection() {
 
     // Effect to handle navigation after hits load
     useEffect(() => {
-        if (!loading && hits.length > 0 && pendingNavigation) {
+        if (!loading && hits.length > 0 && pendingNavigation && page === lastLoadedPage) {
             if (pendingNavigation === 'next') {
                 setSelectedEventIndex(0); // Select first item of new page
             } else if (pendingNavigation === 'prev') {
@@ -159,7 +160,7 @@ export function HitsSection() {
             }
             setPendingNavigation(null);
         }
-    }, [hits, loading]);
+    }, [hits, loading, page, lastLoadedPage, pendingNavigation]);
 
     const loadHits = async () => {
         setLoading(true);
@@ -183,6 +184,7 @@ export function HitsSection() {
             setHits(res.data.hits);
             setTotalPages(res.data.total_pages);
             setTotalCount(res.data.total);
+            setLastLoadedPage(page);
 
             if (res.data.cameras) setAvailableCameras(res.data.cameras);
             if (res.data.labels) setAvailableLabels(res.data.labels);
