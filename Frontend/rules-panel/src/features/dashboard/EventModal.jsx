@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { X, ChevronLeft, ChevronRight, Calendar, Clock, Camera, Tag, AlertTriangle } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
 
@@ -43,6 +43,20 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
     const score = event_data?.score ? Math.round(event_data.score * 100) : null;
     const dateObj = new Date(triggered_at);
 
+    // Zoom Logic
+    const [zoom, setZoom] = useState({ x: 0, y: 0, isActive: false });
+
+    const handleMouseMove = (e) => {
+        const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - left) / width) * 100;
+        const y = ((e.clientY - top) / height) * 100;
+        setZoom({ x, y, isActive: true });
+    };
+
+    const handleMouseLeave = () => {
+        setZoom(prev => ({ ...prev, isActive: false }));
+    };
+
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
             {/* Backdrop click to close */}
@@ -60,12 +74,20 @@ export function EventModal({ isOpen, onClose, event, onNext, onPrev, hasNext, ha
                 </button>
 
                 {/* Left: Image */}
-                <div className="relative flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-full group">
+                <div
+                    className="relative flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-full group overflow-hidden cursor-zoom-in"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                >
                     {snapshot_base64 ? (
                         <img
                             src={`data:image/jpeg;base64,${snapshot_base64}`}
                             alt="Event Snapshot"
-                            className="max-h-full max-w-full object-contain"
+                            style={{
+                                transformOrigin: `${zoom.x}% ${zoom.y}%`,
+                                transform: zoom.isActive ? "scale(2.5)" : "scale(1)",
+                            }}
+                            className="w-full h-full object-contain transition-transform duration-100 ease-out will-change-transform"
                         />
                     ) : (
                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
