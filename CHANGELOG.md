@@ -13,7 +13,13 @@ All notable changes to this project will be documented in this file.
   - Implemented **Date/Time Range** filters with correct Timezone handling (Local -> UTC).
 - **Internationalization**: 
   - Added Spanish translations for object detection labels (e.g., "person" -> "Persona", "dog" -> "Perro").
+  - **Refined Labels**: "Car,bus,truck" rules now appear as separate selectable options.
 
 ### 💄 UI/UX
+- **Infinite Event Modal**: 
+  - New pop-up viewer for events with large snapshots.
+  - Seamless navigation between events, automatically loading previous/next pages.
 - **Design Polish**: Updated dropdown hover states to a cleaner neutral gray palette.
-- **Bug Fixes**: Resolved z-index issues where dropdown menus were occluded by adjacent cards.
+- **Bug Fixes**: 
+  - Resolved timezone issues preventing Date From/To filters from working.
+  - Fixed syntax errors in Hits dashboard.

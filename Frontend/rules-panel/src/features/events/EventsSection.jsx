@@ -90,7 +90,7 @@ export function EventsSection() {
                         color: "#0f172a",
                         letterSpacing: "-0.01em",
                     }}>
-                        Feed de Eventos (Frigate)
+                        Feed de Eventos
                     </h3>
                     <ButtonRefresh onClick={loadEvents} loading={loading} />
                 </div>

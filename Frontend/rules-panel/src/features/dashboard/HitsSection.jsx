@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/Badge";
 import { MultiSelect } from "../../components/ui/MultiSelect";
 import { useToast } from "../../context/ToastContext";
 import { Shield, Filter, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { EventModal } from "./EventModal";
 
 const LABEL_TRANSLATIONS = {
     "person": "Persona",
@@ -96,7 +97,7 @@ export function HitsSection() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
-    const pageSize = 18;
+    const pageSize = 20;
 
     // Filters & Options
     const [availableCameras, setAvailableCameras] = useState([]);
@@ -108,6 +109,57 @@ export function HitsSection() {
         start_date: "",
         end_date: ""
     });
+
+    // Modal State
+    const [selectedEventIndex, setSelectedEventIndex] = useState(null);
+    const [pendingNavigation, setPendingNavigation] = useState(null); // 'next' | 'prev'
+
+    const handleEventClick = (index) => {
+        setSelectedEventIndex(index);
+    };
+
+    const handleCloseModal = () => {
+        setSelectedEventIndex(null);
+        setPendingNavigation(null);
+    };
+
+    const handleNextEvent = () => {
+        if (selectedEventIndex !== null) {
+            if (selectedEventIndex < hits.length - 1) {
+                // Normal navigation within page
+                setSelectedEventIndex(selectedEventIndex + 1);
+            } else if (page < totalPages) {
+                // Cross page boundary (Next Page)
+                setPendingNavigation('next');
+                setPage(p => p + 1);
+            }
+        }
+    };
+
+    const handlePrevEvent = () => {
+        if (selectedEventIndex !== null) {
+            if (selectedEventIndex > 0) {
+                // Normal navigation within page
+                setSelectedEventIndex(selectedEventIndex - 1);
+            } else if (page > 1) {
+                // Cross page boundary (Prev Page)
+                setPendingNavigation('prev');
+                setPage(p => p - 1);
+            }
+        }
+    };
+
+    // Effect to handle navigation after hits load
+    useEffect(() => {
+        if (!loading && hits.length > 0 && pendingNavigation) {
+            if (pendingNavigation === 'next') {
+                setSelectedEventIndex(0); // Select first item of new page
+            } else if (pendingNavigation === 'prev') {
+                setSelectedEventIndex(hits.length - 1); // Select last item of new page
+            }
+            setPendingNavigation(null);
+        }
+    }, [hits, loading]);
 
     const loadHits = async () => {
         setLoading(true);
@@ -262,10 +314,11 @@ export function HitsSection() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {hits.map((hit) => (
+                    {hits.map((hit, index) => (
                         <div
                             key={hit.id}
-                            className="group relative overflow-hidden rounded-xl border bg-card text-card-foreground shadow transition-all hover:shadow-lg hover:-translate-y-1"
+                            onClick={() => handleEventClick(index)}
+                            className="group relative overflow-hidden rounded-xl border bg-card text-card-foreground shadow transition-all hover:shadow-lg hover:-translate-y-1 cursor-pointer ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             {hit.snapshot_base64 && (
                                 <div className="aspect-video w-full overflow-hidden bg-muted">
@@ -346,7 +399,18 @@ export function HitsSection() {
                     </div>
                 )}
             </Card>
-        </div>
+
+            {/* Event Details Modal */}
+            <EventModal
+                isOpen={selectedEventIndex !== null}
+                onClose={handleCloseModal}
+                event={selectedEventIndex !== null ? hits[selectedEventIndex] : null}
+                onNext={handleNextEvent}
+                onPrev={handlePrevEvent}
+                hasNext={(selectedEventIndex !== null && selectedEventIndex < hits.length - 1) || page < totalPages}
+                hasPrev={(selectedEventIndex !== null && selectedEventIndex > 0) || page > 1}
+            />
+        </div >
     );
 }
 

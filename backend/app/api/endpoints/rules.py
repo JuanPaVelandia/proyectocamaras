@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import Dict, Any, List
 import logging
 import json
+from datetime import datetime
 
 from app.db.session import SessionLocal
 from app.models.all_models import RuleDB, RuleHitDB, UserDB, EventDB
@@ -120,47 +122,39 @@ def list_rule_hits(
         query = query.filter(RuleDB.camera.in_(camera))
     
     if label:
-        # Para búsqueda case-insensitive en lista, tendríamos que iterar o usar ILIKE ANY (Postgres)
-        # SQLite no soporta ILIKE ANY fácilmente.
-        # Asumiremos coincidencia exacta para multi-select, o usaremos un workaround.
-        # Dado que los valores vienen de un dropdown, la coincidencia exacta es preferible/segura.
-        query = query.filter(RuleDB.label.in_(label))
+        # User sends individual labels e.g. ["car", "bus"]
+        # RuleDB.label might be "car,bus,truck".
+        # We want to match if ANY of the selected labels matches the rule label.
+        # We use ILIKE for partial and case-insensitive matching.
+        conditions = [RuleDB.label.ilike(f"%{l}%") for l in label]
+        query = query.filter(or_(*conditions))
 
     user_timezone = current_user.timezone or "UTC"
 
     if start_date:
         try:
-            # El frontend envía datetime-local (YYYY-MM-DDTHH:MM) sin info de zona horaria.
-            # Interpretamos esa fecha como la HORA LOCAL del usuario.
-            # Convertimos esa hora local -> UTC para comparar con la DB.
-            dt_local_str = start_date.replace("Z", "") # Limpieza por si acaso
-            # convert_local_time_to_utc devuelve un objeto time (HH:MM), pero aquí necesitamos datetime completo.
-            # No podemos usar esa función directamente porque es para horas simples.
-            # Haremos la conversión manual aquí usando pytz o similar si estuviera, 
-            # pero dado que convert_local_time_to_utc usa una lógica manual simple, haremos algo parecido.
+            logger.info(f"📅 start_date recibido: {start_date}, Timezone: {user_timezone}")
+            dt_local_str = start_date.replace("Z", "")
             
-            # Simple approach: Parse naive (Local) -> Attach User TZ -> Convert to UTC -> Remove TZ info (make naive UTC)
-            from app.utils.timezone_utils import pytz
+            import pytz
             local_tz = pytz.timezone(user_timezone)
             
-            # Parsear string naive
             dt_naive = datetime.fromisoformat(dt_local_str)
-            # Asignar zona horaria del usuario
             dt_local = local_tz.localize(dt_naive)
-            # Convertir a UTC
             dt_utc = dt_local.astimezone(pytz.UTC)
-            # Hacerlo naive de nuevo para comparar con SQLAlchemy (si el campo es naive)
             dt_query = dt_utc.replace(tzinfo=None)
-
+            
+            logger.info(f"✅ Filtro Start aplicado. Local: {dt_local} -> UTC Query: {dt_query}")
             query = query.filter(RuleHitDB.triggered_at >= dt_query)
         except Exception as e:
-            logger.error(f"Error parsing start_date: {e}")
+            logger.error(f"❌ Error parsing start_date: {e}")
             pass
 
     if end_date:
         try:
+            logger.info(f"📅 end_date recibido: {end_date}, Timezone: {user_timezone}")
             dt_local_str = end_date.replace("Z", "")
-            from app.utils.timezone_utils import pytz
+            import pytz
             local_tz = pytz.timezone(user_timezone)
             
             dt_naive = datetime.fromisoformat(dt_local_str)
@@ -168,9 +162,10 @@ def list_rule_hits(
             dt_utc = dt_local.astimezone(pytz.UTC)
             dt_query = dt_utc.replace(tzinfo=None)
 
+            logger.info(f"✅ Filtro End aplicado. Local: {dt_local} -> UTC Query: {dt_query}")
             query = query.filter(RuleHitDB.triggered_at <= dt_query)
         except Exception as e:
-            logger.error(f"Error parsing end_date: {e}")
+            logger.error(f"❌ Error parsing end_date: {e}")
             pass
 
     # Total count (antes de paginacion)
@@ -205,7 +200,13 @@ def list_rule_hits(
         .distinct()
         .all()
     )
-    unique_labels = sorted([r[0] for r in distinct_labels_rows if r[0]])
+    unique_labels_set = set()
+    for r in distinct_labels_rows:
+        if r[0]:
+            # Split commas and strip whitespace: "car, bus" -> ["car", "bus"]
+            parts = [p.strip() for p in r[0].split(',')]
+            unique_labels_set.update(parts)
+    unique_labels = sorted(list(unique_labels_set))
 
     hits = []
     for h in rows:
