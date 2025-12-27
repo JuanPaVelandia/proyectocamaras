@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] - 2025-12-27
+### ⏪ Reverts
+- **Camera Thumbnails**: Restored the automatic snapshot loading in the camera list. (User preferred thumbnails over the performance optimization).
+
 ## [1.2.1] - 2025-12-27
 ### ⚡ Performance
 - **Critical Fix**: Disabled automatic snapshot loading in the camera list. This prevents timeouts (Error 504) for users with large event databases.
