@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2025-12-27
+### ⚡ Performance
+- **Critical Fix**: Disabled automatic snapshot loading in the camera list. This prevents timeouts (Error 504) for users with large event databases.
+
+### 🛡️ Security & Anti-Spam
+- **WhatsApp Deduplication**: Implemented intelligent duplicate detection.
+  - **Time Filter**: Events within 60s are checked for duplication.
+  - **Spatial Filter**: Compares the bounding box of the new object vs the old one. If the object hasn't moved significanty (>50px), the alert is suppressed.
+
 ## [1.2] - 2025-12-24
 
 ### 🔒 Security & Architecture

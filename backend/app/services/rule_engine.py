@@ -128,6 +128,72 @@ def evaluate_rules(event_body: Dict[str, Any], event_db_id: int):
                 # logging.debug(f"Regla {rule.name} descartada: {reasons}")
                 continue
 
+            # --- DESDUPLICACIÓN INTELIGENTE (Anti-Spam) ---
+            # Verifica si ya enviamos una alerta similar recientemente
+            is_spam = False
+            last_hit = (
+                db.query(RuleHitDB)
+                .filter(RuleHitDB.rule_id == rule.id)
+                .order_by(RuleHitDB.triggered_at.desc())
+                .first()
+            )
+
+            if last_hit:
+                time_diff = (datetime.utcnow() - last_hit.triggered_at).total_seconds()
+                
+                # 1. Filtro de Tiempo (60 segundos por defecto)
+                if time_diff < 60:
+                    # Recuperamos el evento anterior para comparar posiciones
+                    prev_event = db.query(EventDB).filter(EventDB.id == last_hit.event_id).first()
+                    
+                    if prev_event:
+                        import json
+                        import math
+                        
+                        try:
+                            # Datos actuales
+                            curr_box = event_body.get("box", [])
+                            
+                            # Datos anteriores
+                            prev_payload = json.loads(prev_event.payload)
+                            prev_box = prev_payload.get("box", [])
+
+                            # Si ambos tienen caja, comparamos distancia (Filtro Espacial)
+                            if curr_box and prev_box and len(curr_box) == 4 and len(prev_box) == 4:
+                                # Detección automática de formato (Normalizado vs Pixeles)
+                                # Si los valores son pequeños (<1.1), asumimos normalizado.
+                                is_normalized = all(x <= 1.1 for x in curr_box)
+                                tolerance = 0.05 if is_normalized else 50.0  # 5% o 50px de margen
+
+                                # Cálculo de Centroides ( promedio de coord )
+                                # Funciona igual para [ymin, xmin, ymax, xmax] o [x, y, w, h]
+                                # c_x = (x1 + x2) / 2
+                                # c_y = (y1 + y2) / 2
+                                c1_y = (curr_box[0] + curr_box[2]) / 2
+                                c1_x = (curr_box[1] + curr_box[3]) / 2
+                                
+                                c2_y = (prev_box[0] + prev_box[2]) / 2
+                                c2_x = (prev_box[1] + prev_box[3]) / 2
+
+                                # Distancia Euclidiana
+                                distance = math.sqrt((c1_x - c2_x)**2 + (c1_y - c2_y)**2)
+
+                                if distance < tolerance:
+                                    logging.info(f"🚫 Alerta duplicada descartada (Distancia {distance:.2f} < Margen {tolerance})")
+                                    is_spam = True
+                            else:
+                                # Sin cajas para comparar, nos basamos solo en el tiempo
+                                logging.info(f"🚫 Alerta duplicada descartada por tiempo ({time_diff:.1f}s < 60s)")
+                                is_spam = True
+
+                        except Exception as e_dup:
+                            logging.error(f"Error calculando duplicados: {e_dup}")
+                            # En caso de error, NO marcamos como spam por seguridad
+                            is_spam = False
+
+            if is_spam:
+                continue
+
             # --- PASO 5: EJECUCIÓN (MATCH EXITOSO) ---
             
             # Registrar el disparo de la regla
