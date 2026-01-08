@@ -616,7 +616,7 @@ ipcMain.handle('health:downloadDependencies', async () => {
 });
 
 // -- APP LIFECYCLE --
-function createWindow() {
+function createWindow(startHidden = false) {
   const win = new BrowserWindow({
     width: 900,
     height: 600,
@@ -639,8 +639,61 @@ function createWindow() {
       win.setContentSize(w, clamped);
     } catch (e) { logDebug(`did-finish-load fit error: ${e.message}`); }
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { if (!startHidden) win.show(); });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  let startHidden = false;
+  try {
+    const settings = app.getLoginItemSettings ? app.getLoginItemSettings() : {};
+    const wasOpenedAtLogin = !!(settings && settings.wasOpenedAtLogin);
+    const wasOpenedAsHidden = !!(settings && settings.wasOpenedAsHidden);
+    const argvHidden = (process.argv || []).includes('--hidden');
+    startHidden = wasOpenedAtLogin || wasOpenedAsHidden || argvHidden;
+  } catch {}
+  createWindow(startHidden);
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+// ---- Auto-launch at login (macOS/Windows) ----
+function isAutoLaunchSupported() {
+  const p = os.platform();
+  return p === 'darwin' || p === 'win32';
+}
+
+function getAutoLaunchStatus() {
+  if (!isAutoLaunchSupported() || !app.getLoginItemSettings) {
+    return { supported: false, enabled: false };
+  }
+  try {
+    const s = app.getLoginItemSettings();
+    return { supported: true, enabled: !!s.openAtLogin };
+  } catch (e) {
+    logDebug(`getAutoLaunchStatus error: ${e.message}`);
+    return { supported: true, enabled: false, error: String(e.message || e) };
+  }
+}
+
+function setAutoLaunchEnabled(enabled) {
+  if (!isAutoLaunchSupported() || !app.setLoginItemSettings) return false;
+  try {
+    if (os.platform() === 'darwin') {
+      app.setLoginItemSettings({ openAtLogin: !!enabled, openAsHidden: true });
+    } else if (os.platform() === 'win32') {
+      // Pass an argument to allow hidden start handling on Windows
+      const args = enabled ? ['--hidden'] : [];
+      app.setLoginItemSettings({ openAtLogin: !!enabled, args });
+    }
+    return true;
+  } catch (e) {
+    logDebug(`setAutoLaunchEnabled error: ${e.message}`);
+    return false;
+  }
+}
+
+ipcMain.handle('health:getAutoLaunch', async () => {
+  return getAutoLaunchStatus();
+});
+ipcMain.handle('health:setAutoLaunch', async (_ev, enabled) => {
+  return setAutoLaunchEnabled(!!enabled);
+});

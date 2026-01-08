@@ -443,6 +443,12 @@
               <button id="btnStartVidria" class="btn" style="min-width:180px;">Iniciar Vidria</button>
               <button id="btnLogout" class="btn secondary" style="margin-left:auto;">Cerrar sesión</button>
             </div>
+            <div class="field">
+              <label class="label" for="chkAutoLaunch">
+                <input type="checkbox" id="chkAutoLaunch" /> Iniciar Vidria al iniciar sesión
+              </label>
+              <div id="autoLaunchNote" class="note"></div>
+            </div>
             <div id="details" style="display:block;">
               <table>
                 <thead>
@@ -659,6 +665,26 @@
       }
       await logMsg(`Paso3: Docker detectado | platform=${st.platform} packaged=${st.packaged} repoDir=${st.repoDir} docker.bin=${dk.bin||''} docker.version=${dk.version||''} compose.installed=${comp.installed?'yes':'no'} compose.version=${comp.version||''} compose.bin=${comp.bin||''} compose.args=${(comp.args||[]).join(' ')}`);
       showStep(AGENT_STEP); await refreshStatus();
+
+      // Initialize auto-launch toggle
+      try {
+        const box = $('chkAutoLaunch'); const note = $('autoLaunchNote');
+        if (box) {
+          const al = await (window.health.getAutoLaunch ? window.health.getAutoLaunch() : Promise.resolve({ supported:false }));
+          if (al && al.supported) {
+            box.checked = !!al.enabled; if (note) note.textContent = '';
+            box.addEventListener('change', async () => {
+              const prev = box.checked; box.disabled = true;
+              try {
+                const ok = await (window.health.setAutoLaunch ? window.health.setAutoLaunch(box.checked) : Promise.resolve(false));
+                if (!ok) { box.checked = !prev; alert('No se pudo actualizar auto-inicio'); }
+              } finally { box.disabled = false; }
+            });
+          } else {
+            box.disabled = true; if (note) note.textContent = 'Auto-inicio no soportado en este sistema.';
+          }
+        }
+      } catch {}
     }
 
     // LOGIN
