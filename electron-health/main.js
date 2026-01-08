@@ -651,49 +651,70 @@ app.whenReady().then(() => {
     const argvHidden = (process.argv || []).includes('--hidden');
     startHidden = wasOpenedAtLogin || wasOpenedAsHidden || argvHidden;
   } catch {}
+  // Ensure autolaunch is enabled by default on supported platforms
+  try {
+    if (app.setLoginItemSettings) {
+      if (process.platform === 'darwin') {
+        app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+      } else if (process.platform === 'win32') {
+        app.setLoginItemSettings({ openAtLogin: true, path: process.execPath, args: ['--hidden'] });
+      }
+      try {
+        const s = app.getLoginItemSettings ? app.getLoginItemSettings() : {};
+        logDebug(`auto-launch status: openAtLogin=${!!s.openAtLogin} wasOpenedAtLogin=${!!s.wasOpenedAtLogin}`);
+      } catch {}
+    }
+  } catch (e) {
+    logDebug(`auto-launch enable error: ${e.message}`);
+  }
   createWindow(startHidden);
+  // Attempt to auto-start services if environment is ready
+  setTimeout(() => { try { autoStartIfReady(); } catch (e) { logDebug(`autoStart schedule error: ${e.message}`); } }, 1200);
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
-// ---- Auto-launch at login (macOS/Windows) ----
-function isAutoLaunchSupported() {
-  const p = os.platform();
-  return p === 'darwin' || p === 'win32';
-}
-
-function getAutoLaunchStatus() {
-  if (!isAutoLaunchSupported() || !app.getLoginItemSettings) {
-    return { supported: false, enabled: false };
-  }
+let _autoStartRan = false;
+async function autoStartIfReady() {
+  if (_autoStartRan) return; _autoStartRan = true;
   try {
-    const s = app.getLoginItemSettings();
-    return { supported: true, enabled: !!s.openAtLogin };
-  } catch (e) {
-    logDebug(`getAutoLaunchStatus error: ${e.message}`);
-    return { supported: true, enabled: false, error: String(e.message || e) };
-  }
-}
+    const dockerVer = await getDockerVersion();
+    if (!dockerVer) { logDebug('autoStart: Docker not installed, skipping'); return; }
+    const composeInfo = await detectComposeCmd();
+    if (!composeInfo || !composeInfo.bin) { logDebug('autoStart: compose not available, skipping'); return; }
+    const repoDir = resolveRepoDir();
+    const depsReady = fs.existsSync(path.join(repoDir, 'docker-compose.client.yml'));
+    if (isPackaged() && !depsReady) { logDebug('autoStart: packaged but dependencies missing, skipping'); return; }
 
-function setAutoLaunchEnabled(enabled) {
-  if (!isAutoLaunchSupported() || !app.setLoginItemSettings) return false;
-  try {
-    if (os.platform() === 'darwin') {
-      app.setLoginItemSettings({ openAtLogin: !!enabled, openAsHidden: true });
-    } else if (os.platform() === 'win32') {
-      // Pass an argument to allow hidden start handling on Windows
-      const args = enabled ? ['--hidden'] : [];
-      app.setLoginItemSettings({ openAtLogin: !!enabled, args });
+    // Ensure Docker daemon is up
+    let ready = await waitForDockerReady(5000);
+    if (!ready) {
+      if (os.platform() === 'win32') {
+        const exe = 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe';
+        if (fs.existsSync(exe)) {
+          try { const sub = spawn(exe, [], { detached: true, stdio: 'ignore' }); sub.unref(); } catch {}
+        }
+      } else if (os.platform() === 'darwin') {
+        await run('open', ['-a', 'Docker']);
+      }
+      ready = await waitForDockerReady(120000);
     }
-    return true;
+    if (!ready) { logDebug('autoStart: Docker not ready after wait, skipping'); return; }
+
+    // Compose up (mirrors handler logic)
+    const cmd = composeInfo.bin;
+    const baseArgs = composeInfo.args || [];
+    const args = [...baseArgs, '-f', 'docker-compose.client.yml', 'up', '-d'];
+    let r = await run(cmd, args, { cwd: repoDir });
+    if (r.code !== 0 && (r.err.includes('Conflict') || r.err.includes('already in use'))) {
+      logDebug('autoStart: conflict detected, running compose down');
+      const downArgs = [...baseArgs, '-f', 'docker-compose.client.yml', 'down', '--remove-orphans'];
+      await run(cmd, downArgs, { cwd: repoDir });
+      logDebug('autoStart: retrying compose up after down');
+      r = await run(cmd, args, { cwd: repoDir });
+    }
+    if (r.code !== 0) { logDebug(`autoStart: compose up failed: ${r.err || r.out}`); return; }
+    logDebug('autoStart: compose up success');
   } catch (e) {
-    logDebug(`setAutoLaunchEnabled error: ${e.message}`);
-    return false;
+    logDebug(`autoStart error: ${e.message}`);
   }
 }
-
-ipcMain.handle('health:getAutoLaunch', async () => {
-  return getAutoLaunchStatus();
-});
-ipcMain.handle('health:setAutoLaunch', async (_ev, enabled) => {
-  return setAutoLaunchEnabled(!!enabled);
-});

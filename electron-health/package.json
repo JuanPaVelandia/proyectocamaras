@@ -6,6 +6,8 @@
   "description": "Health panel for Frigate stack (proxy/listener/Frigate) with Docker checks",
   "scripts": {
     "start": "electron .",
+    "run:prod": "electron . --prod",
+    "prod": "electron . --prod",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist": "electron-builder"

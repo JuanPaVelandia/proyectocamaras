@@ -13,6 +13,4 @@ contextBridge.exposeInMainWorld('health', {
   setCustomerId: (id) => ipcRenderer.invoke('health:setCustomerId', id),
   clearCustomerId: () => ipcRenderer.invoke('health:clearCustomerId'),
   fitWindow: () => ipcRenderer.invoke('health:fitWindow'),
-  getAutoLaunch: () => ipcRenderer.invoke('health:getAutoLaunch'),
-  setAutoLaunch: (enabled) => ipcRenderer.invoke('health:setAutoLaunch', enabled),
 });
