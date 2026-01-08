@@ -521,6 +521,8 @@
       if (step === 2) setWizardProgress(30);
       if (step === 3) setWizardProgress(60);
       if (step === 4) setWizardProgress(85);
+      if (step === AGENT_STEP) startStatusPolling();
+      else stopStatusPolling();
       if (window.health && window.health.fitWindow) { try { window.health.fitWindow(); } catch { } }
     }
 
@@ -539,6 +541,18 @@
     }
 
     let lottieInstance = null;
+    let statusPollId = null;
+
+    function startStatusPolling() {
+      if (statusPollId) return;
+      statusPollId = setInterval(() => {
+        if (isLoggedIn()) refreshStatus();
+      }, 5000);
+    }
+
+    function stopStatusPolling() {
+      if (statusPollId) { clearInterval(statusPollId); statusPollId = null; }
+    }
 
     async function refreshStatus() {
       const st = await window.health.getStatus();
@@ -837,6 +851,8 @@
     const btnLogoutTop = $('btnLogoutTop'); if (btnLogoutTop) btnLogoutTop.addEventListener('click', handleLogout);
 
     // Init
+    window.addEventListener('focus', () => { if (isLoggedIn()) refreshStatus(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && isLoggedIn()) refreshStatus(); });
     initWizard();
   </script>
 </body>

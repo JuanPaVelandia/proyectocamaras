@@ -1,4 +1,5 @@
 ﻿const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -616,6 +617,78 @@ ipcMain.handle('health:downloadDependencies', async () => {
 });
 
 // -- APP LIFECYCLE --
+let mainWindow = null;
+let tray = null;
+let isQuitting = false;
+
+function getMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  const wins = BrowserWindow.getAllWindows();
+  return wins && wins.length ? wins[0] : null;
+}
+
+function createTray() {
+  if (tray) return tray;
+  const iconPath = path.join(__dirname, 'logo.png');
+  const img = nativeImage.createFromPath(iconPath);
+  if (img.isEmpty && img.isEmpty()) {
+    logDebug(`tray icon missing or invalid: ${iconPath}`);
+  }
+  if (process.platform === 'darwin') {
+    try { img.setTemplateImage(true); } catch {}
+  }
+  tray = new Tray(img);
+  tray.setToolTip('Vidria');
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Abrir Vidria', click: () => { const win = getMainWindow(); if (win) { win.show(); win.focus(); } } },
+    { label: 'Ocultar', click: () => { const win = getMainWindow(); if (win) win.hide(); } },
+    { type: 'separator' },
+    { label: 'Salir', click: () => { isQuitting = true; app.quit(); } },
+  ]);
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    const win = getMainWindow();
+    if (!win) return;
+    if (win.isVisible()) win.hide();
+    else { win.show(); win.focus(); }
+  });
+  return tray;
+}
+
+function ensureAutoLaunch() {
+  try {
+    if (process.platform === 'darwin') {
+      if (app.setLoginItemSettings) app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+      return;
+    }
+    if (process.platform !== 'win32') return;
+    if (!isPackaged()) return;
+
+    if (app.setLoginItemSettings) {
+      app.setLoginItemSettings({ openAtLogin: true, path: process.execPath, args: ['--hidden'] });
+    }
+
+    const settings = app.getLoginItemSettings ? app.getLoginItemSettings() : null;
+    const openAtLogin = !!(settings && settings.openAtLogin);
+    logDebug(`auto-launch status: openAtLogin=${openAtLogin} wasOpenedAtLogin=${!!settings?.wasOpenedAtLogin}`);
+
+    if (!openAtLogin) {
+      const startupDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+      const shortcutPath = path.join(startupDir, 'Vidria.lnk');
+      const ok = shell.writeShortcutLink(shortcutPath, {
+        target: process.execPath,
+        args: '--hidden',
+        workingDirectory: path.dirname(process.execPath),
+        description: 'Vidria',
+        icon: process.execPath,
+      });
+      logDebug(`auto-launch shortcut ${ok ? 'created' : 'failed'}: ${shortcutPath}`);
+    }
+  } catch (e) {
+    logDebug(`auto-launch enable error: ${e.message}`);
+  }
+}
+
 function createWindow(startHidden = false) {
   const win = new BrowserWindow({
     width: 900,
@@ -624,13 +697,15 @@ function createWindow(startHidden = false) {
     useContentSize: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      partition: 'persist:vidria',
       nodeIntegration: false,
       contextIsolation: true,
     },
     autoHideMenuBar: true,
     show: false,
   });
-  win.loadFile('wizard.html');
+  mainWindow = win;
+  win.loadFile(path.join(__dirname, 'wizard.html'));
   win.webContents.on('did-finish-load', async () => {
     try {
       const h = await win.webContents.executeJavaScript('(() => { const el = document.querySelector(".wizard"); return el ? el.offsetHeight : document.body.scrollHeight; })()');
@@ -640,6 +715,13 @@ function createWindow(startHidden = false) {
     } catch (e) { logDebug(`did-finish-load fit error: ${e.message}`); }
   });
   win.once('ready-to-show', () => { if (!startHidden) win.show(); });
+  win.on('close', (e) => {
+    if (isQuitting || process.platform === 'darwin') return;
+    if (tray) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
 }
 
 app.whenReady().then(() => {
@@ -652,24 +734,17 @@ app.whenReady().then(() => {
     startHidden = wasOpenedAtLogin || wasOpenedAsHidden || argvHidden;
   } catch {}
   // Ensure autolaunch is enabled by default on supported platforms
-  try {
-    if (app.setLoginItemSettings) {
-      if (process.platform === 'darwin') {
-        app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
-      } else if (process.platform === 'win32') {
-        app.setLoginItemSettings({ openAtLogin: true, path: process.execPath, args: ['--hidden'] });
-      }
-      try {
-        const s = app.getLoginItemSettings ? app.getLoginItemSettings() : {};
-        logDebug(`auto-launch status: openAtLogin=${!!s.openAtLogin} wasOpenedAtLogin=${!!s.wasOpenedAtLogin}`);
-      } catch {}
-    }
-  } catch (e) {
-    logDebug(`auto-launch enable error: ${e.message}`);
-  }
+  ensureAutoLaunch();
+  createTray();
   createWindow(startHidden);
   // Attempt to auto-start services if environment is ready
   setTimeout(() => { try { autoStartIfReady(); } catch (e) { logDebug(`autoStart schedule error: ${e.message}`); } }, 1200);
+});
+app.on('before-quit', () => { isQuitting = true; });
+app.on('activate', () => {
+  const win = getMainWindow();
+  if (win) win.show();
+  else createWindow(false);
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
