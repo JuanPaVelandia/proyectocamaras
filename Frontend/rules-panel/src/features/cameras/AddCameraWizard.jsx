@@ -185,8 +185,8 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
         // Usamos guess para verificar si responde algo válido en ese puerto/ruta
         try {
             // Construimos la URL
-            const user = formData.username ? encodeURIComponent(formData.username) : "";
-            const pass = formData.password ? encodeURIComponent(formData.password) : "";
+            const user = formData.username ? formData.username : "";
+            const pass = formData.password ? formData.password : "";
             const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
             const rtspUrl = `rtsp://${auth}${formData.ip}:${formData.port}${formData.stream_path}`;
 
@@ -215,8 +215,8 @@ export function AddCameraWizard({ onCancel, onSuccess, initialData = null }) {
 
     const buildRtspUrl = () => {
         const path = formData.stream_path?.startsWith("/") ? formData.stream_path : `/${formData.stream_path || ""}`;
-        const user = formData.username ? encodeURIComponent(formData.username) : "";
-        const pass = formData.password ? encodeURIComponent(formData.password) : "";
+        const user = formData.username ? formData.username : "";
+        const pass = formData.password ? formData.password : "";
         const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
         if (!formData.ip || !formData.port) return "";
         return `rtsp://${auth}${formData.ip}:${formData.port}${path}`;

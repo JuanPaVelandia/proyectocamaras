@@ -106,8 +106,9 @@ export function OnboardingWizard({ onComplete }) {
 
     const buildRtspUrl = () => {
         const path = cameraForm.stream_path?.startsWith("/") ? cameraForm.stream_path : `/${cameraForm.stream_path || ""}`;
-        const user = cameraForm.username ? encodeURIComponent(cameraForm.username) : "";
-        const pass = cameraForm.password ? encodeURIComponent(cameraForm.password) : "";
+        // Usar credenciales tal cual (sin URL-encoding) para que Frigate use la contraseña exacta
+        const user = cameraForm.username ? cameraForm.username : "";
+        const pass = cameraForm.password ? cameraForm.password : "";
         const auth = user && pass ? `${user}:${pass}@` : (user ? `${user}@` : "");
         if (!cameraForm.ip || !cameraForm.port) return "";
         return `rtsp://${auth}${cameraForm.ip}:${cameraForm.port}${path}`;
